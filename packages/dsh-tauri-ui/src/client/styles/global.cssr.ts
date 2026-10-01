@@ -8,7 +8,7 @@ const { c } = cssr
 const INPUT_DOCK_SELECTOR = '[data-slot="conversation.input.dock"]:has(> :nth-child(3 of :not([data-dsh-tauri-worktree-mode-anchor])))'
 
 export default c([
-  c(INPUT_DOCK_SELECTOR, {
+  c(`:where(${INPUT_DOCK_SELECTOR})`, {
     display: 'flex !important',
     flexDirection: 'column',
     width: 'calc(100% - var(--dsh-composer-side-clearance, 0px) * 2)',

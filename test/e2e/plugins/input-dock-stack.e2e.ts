@@ -115,6 +115,18 @@ describe('input dock hover geometry', () => {
     expect(await heights(), 'anchor 不计入堆叠门槛').toEqual([64, 64])
   })
 
+  it('keeps a stacked dock hidden in the mobile composer stack', async () => {
+    const mobilePage = await browser.newPage({ isMobile: true, hasTouch: true, viewport: { width: 390, height: 844 } })
+    try {
+      await mobilePage.setContent(`<style>${globalStyle.render()}</style><div class="fixture_composerStack"><div data-slot="conversation.input.dock" style="display:contents"><div>one</div><div>two</div><div>three</div></div></div>`)
+      expect(await mobilePage.evaluate(() => matchMedia('(hover: none) and (any-pointer: coarse) and (any-hover: none)').matches), '触摸页面必须命中 Mobile 条件').toBe(true)
+      expect(await mobilePage.locator('[data-slot="conversation.input.dock"]').evaluate(element => getComputedStyle(element).display), '堆叠布局不得盖过 Mobile 隐藏规则').toBe('none')
+    }
+    finally {
+      await mobilePage.close()
+    }
+  })
+
   it('honors reduced motion without disabling expansion', async () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     try {
