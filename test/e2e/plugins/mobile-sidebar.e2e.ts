@@ -223,7 +223,7 @@ describe('native mobile sidebar', () => {
       await touch(cdp, 'touchStart', 180, 500)
       await touch(cdp, 'touchMove', 185, 300)
       await touch(cdp, 'touchEnd')
-      await expect.poll(() => page.locator('#scroll').evaluate(element => element.scrollTop), '纵向手势仍滚动聊天内容').toBeGreaterThan(0)
+      await expect.poll(() => page.locator('#scroll').evaluate(element => element.scrollTop), { message: '纵向手势仍滚动聊天内容' }).toBeGreaterThan(0)
       expect(await opened(page)).toBe(false)
     }
     finally { await page.close() }
@@ -239,7 +239,7 @@ describe('native mobile sidebar', () => {
       await touch(cdp, 'touchStart', 80, 9)
       await touch(cdp, 'touchMove', 160, 9)
       await touch(cdp, 'touchEnd')
-      await expect.poll(() => page.locator('#horizontal').evaluate(element => element.scrollLeft), '向右滑动交还横向滚动容器').toBeLessThan(100)
+      await expect.poll(() => page.locator('#horizontal').evaluate(element => element.scrollLeft), { message: '向右滑动交还横向滚动容器' }).toBeLessThan(100)
       expect(await opened(page)).toBe(false)
     }
     finally { await page.close() }
@@ -248,7 +248,7 @@ describe('native mobile sidebar', () => {
       await touch(next.cdp, 'touchStart', 160, 9)
       await touch(next.cdp, 'touchMove', 40, 9)
       await touch(next.cdp, 'touchEnd')
-      await expect.poll(() => next.page.locator('#horizontal').evaluate(element => element.scrollLeft), '向左滑动仍为原生横向滚动').toBeGreaterThan(0)
+      await expect.poll(() => next.page.locator('#horizontal').evaluate(element => element.scrollLeft), { message: '向左滑动仍为原生横向滚动' }).toBeGreaterThan(0)
       expect(await opened(next.page)).toBe(false)
     }
     finally { await next.page.close() }
