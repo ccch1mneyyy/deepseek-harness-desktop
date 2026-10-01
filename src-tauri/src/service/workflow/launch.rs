@@ -401,6 +401,9 @@ pub async fn launch(app_handle: tauri::AppHandle) -> Result<(), String> {
     if let Err(e) = crate::service::patch::composer::apply(&app_handle) {
         log::warn!("composer workspace-less patch failed: {e}");
     }
+    if let Err(e) = crate::service::patch::mobile_sidebar::apply(&app_handle) {
+        log::warn!("mobile sidebar gesture patch failed: {e}");
+    }
     // Expose an id-based SessionStore.remove facade so plugins can perform a
     // real in-memory teardown instead of leaving deleted sessions ungrouped.
     if let Err(e) = crate::service::patch::session::apply(&app_handle) {
