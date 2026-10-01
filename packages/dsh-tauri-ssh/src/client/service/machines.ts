@@ -49,10 +49,10 @@ export async function load(): Promise<void> {
   }
 }
 
-export async function enable(): Promise<ServiceResult> {
+export async function setEnabled(enabled: boolean): Promise<ServiceResult> {
   store.machines.beginEnable()
   try {
-    store.machines.setEnabled(enabledOf(await api.postSettings({ enabled: true })) !== false, null)
+    store.machines.setEnabled(enabledOf(await api.postSettings({ enabled })) ?? enabled, null)
     if (store.machines.enabled === true)
       await load()
     return { ok: true }

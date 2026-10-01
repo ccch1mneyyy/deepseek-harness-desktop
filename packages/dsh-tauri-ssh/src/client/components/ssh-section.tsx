@@ -68,7 +68,7 @@ export function SshSection({ t }: SshSectionProps): ReactNode {
             size="sm"
             disabled={state.enabling}
             data-testid="ssh-enable"
-            onClick={() => void service.enable()}
+            onClick={() => void service.setEnabled(true)}
           >
             {state.enabling ? t('hero.enabling') : t('hero.enable')}
           </Button>
@@ -92,6 +92,9 @@ export function SshSection({ t }: SshSectionProps): ReactNode {
               openTab(next)
           }}
         />
+        <Button variant="ghost" size="sm" disabled={state.enabling} onClick={() => void service.setEnabled(false)}>
+          {t('disable')}
+        </Button>
       </div>
       {tabs.filter(value => value === tab || visited.has(value)).map((value) => {
         const selected = value === tab

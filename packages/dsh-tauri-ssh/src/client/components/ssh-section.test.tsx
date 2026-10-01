@@ -17,7 +17,7 @@ function bootWire(options: { enabled?: boolean } = {}) {
     if (call.url === `${baseURL}/settings` && call.http === 'GET')
       return replies.ok({ enabled })
     if (call.url === `${baseURL}/settings`) {
-      enabled = true
+      enabled = call.body.enabled === true
       return replies.ok({ enabled })
     }
     if (call.url === `${baseURL}/session/role`)
@@ -62,6 +62,23 @@ describe('sshSection', () => {
     expect(tabs.map(tab => tab.textContent)).toEqual(['t:tabs.machines', 't:tabs.sync'])
     expect(screen.queryByTestId('ssh-hero')).toBeNull()
     expect(screen.getByRole('tab', { selected: true }).textContent).toBe('t:tabs.machines')
+  })
+
+  it('点击禁用：保存关闭开关后回到 Hero 并卸载已访问的面板', async () => {
+    bootWire({ enabled: true })
+    render(<SshSection t={t as never} />)
+    await waitFor(() => expect(screen.getByTestId('ssh-tabs')).toBeTruthy())
+    fireEvent.click(screen.getByRole('tab', { name: 't:tabs.sync' }))
+
+    const button = screen.getByRole('button', { name: 't:disable' })
+    expect(screen.getByTestId('ssh-tabs').contains(button)).toBe(true)
+    fireEvent.click(button)
+
+    await waitFor(() => expect(screen.getByTestId('ssh-enable').textContent).toBe('t:hero.enable'))
+    expect(sent.filter(call => call.url === `${baseURL}/settings` && call.http === 'POST').map(call => call.body)).toEqual([{ enabled: false }])
+    expect(store.machines.enabled).toBe(false)
+    expect(screen.queryByTestId('ssh-tabs')).toBeNull()
+    expect(screen.queryAllByRole('tabpanel', { hidden: true })).toEqual([])
   })
 
   it('已启用：Tabs 默认停在「SSH 机器」，切换后渲染同步面板且已访问面板保持挂载', async () => {

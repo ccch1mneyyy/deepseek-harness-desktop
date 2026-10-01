@@ -313,10 +313,28 @@ describe('feature switch', () => {
       return replies.ok({ remote: false })
     })
     await service.loadSettings()
-    await expect(service.enable()).resolves.toEqual({ ok: true })
+    await expect(service.setEnabled(true)).resolves.toEqual({ ok: true })
     expect(store.machines.enabled).toBe(true)
     expect(store.machines.enabling).toBe(false)
     expect(store.machines.machines.map(row => row.id)).toEqual(['a'])
+  })
+
+  it('keeps SSH enabled when disabling fails and clears the pending flag', async () => {
+    store.machines.setEnabled(true, null)
+    answer(() => replies.fail('cannot save'))
+    await expect(service.setEnabled(false)).resolves.toEqual({ ok: false, error: 'cannot save' })
+    expect(store.machines.enabled).toBe(true)
+    expect(store.machines.enabling).toBe(false)
+    expect(store.machines.error).toBe('cannot save')
+  })
+
+  it('disables without reloading machines', async () => {
+    store.machines.setEnabled(true, null)
+    answer(() => replies.ok({ enabled: false }))
+    await expect(service.setEnabled(false)).resolves.toEqual({ ok: true })
+    expect(store.machines.enabled).toBe(false)
+    expect(store.machines.enabling).toBe(false)
+    expect(callsOf('/machines', 'GET')).toEqual([])
   })
 
   it('reads an unavailable settings endpoint as disabled with the transport code', async () => {
