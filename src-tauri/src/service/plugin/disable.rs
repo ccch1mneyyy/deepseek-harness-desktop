@@ -221,6 +221,28 @@ fn now_seconds_string() -> String {
         .unwrap_or_default()
 }
 
+pub(crate) fn preserve_disabled_bundles(profile: &Path) -> Result<(), String> {
+    let disabled = load_disabled(profile);
+    if disabled.is_empty() {
+        return Ok(());
+    }
+    let path = profile.join("package.json");
+    let raw = fs::read_to_string(&path).map_err(|e| format!("DISABLE_READ_MANIFEST: {e}"))?;
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|e| format!("DISABLE_PARSE_MANIFEST: {e}"))?;
+    let before = manifest.clone();
+    for id in disabled.keys() {
+        remove_bundle(&mut manifest, id);
+    }
+    if manifest != before {
+        let rendered = serde_json::to_string_pretty(&manifest)
+            .map_err(|e| format!("DISABLE_RENDER_MANIFEST: {e}"))?;
+        fs::write(&path, format!("{rendered}\n"))
+            .map_err(|e| format!("DISABLE_WRITE_MANIFEST: {e}"))?;
+    }
+    Ok(())
+}
+
 /// 回滚禁用清单到操作前的状态。
 ///
 /// 当 manifest 写入失败时，把已加入禁用清单的条目移除，使两个持久化文件
@@ -422,6 +444,43 @@ mod tests {
     fn read_manifest(profile: &Path) -> serde_json::Value {
         let content = fs::read_to_string(profile.join("package.json")).unwrap();
         serde_json::from_str(&content).unwrap()
+    }
+
+    #[test]
+    fn preserve_disabled_bundles_keeps_builtin_disabled_after_install() {
+        let profile = build_profile("preserve-builtin", "builtin");
+        let mut manifest = read_manifest(&profile);
+        manifest["dependencies"]["dsh-tauri-pet"] = serde_json::json!("link:/bundled/pet");
+        manifest["dsh"]["profile"]["bundles"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!("dsh-tauri-pet"));
+        fs::write(
+            profile.join("package.json"),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+        disable_plugin_at(&profile, "dsh-tauri-pet").unwrap();
+        fs::write(
+            profile.join("package.json"),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+        preserve_disabled_bundles(&profile).unwrap();
+        let preserved = read_manifest(&profile);
+        assert_eq!(preserved["dependencies"], manifest["dependencies"]);
+        assert_eq!(
+            preserved["dsh"]["profile"]["bundles"],
+            serde_json::json!(["dsh-better-sidebar", "dshmarket", "@deepseek-ai/dsh-base"])
+        );
+        assert!(load_disabled(&profile).contains_key("dsh-tauri-pet"));
+        enable_plugin_at(&profile, "dsh-tauri-pet", false).unwrap();
+        assert!(!load_disabled(&profile).contains_key("dsh-tauri-pet"));
+        assert!(read_manifest(&profile)["dsh"]["profile"]["bundles"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("dsh-tauri-pet")));
+        fs::remove_dir_all(profile).unwrap();
     }
 
     #[test]

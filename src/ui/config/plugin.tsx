@@ -68,7 +68,6 @@ export function ConfigPlugin() {
   const internalPlugins = plugins.filter(plugin => plugin.internal)
   const managedPlugins = plugins.filter(plugin => !plugin.internal)
 
-  /** 「内置插件」分组是否展开：默认折叠，内置插件由启动自愈维护，不作为常规可管理项 */
   const [showInternal, toggleShowInternal] = useToggle()
   /** 高级选项：默认关闭，快照（创建/还原/删除）属于低频维护操作，不常驻每行 */
   const [advanced, toggleAdvanced] = useToggle()
@@ -227,6 +226,23 @@ export function ConfigPlugin() {
   }
 
   async function onDisable(id: string) {
+    if (rowBusy(id))
+      return
+    const plugin = plugins.find(p => p.id === id)
+    if (plugin?.internal) {
+      try {
+        await openDialog({
+          status: 'warning',
+          title: t('plugins.disable_builtin_confirm_title'),
+          description: <p>{t('plugins.disable_builtin_confirm_desc', { name: plugin.name })}</p>,
+          confirmText: t('plugins.disable'),
+        })
+      }
+      catch (e) {
+        silence(e, 'plugin disable: dialog cancelled')
+        return
+      }
+    }
     await runAction(id, 'disable', () => manager.disable(id))
   }
 
@@ -453,9 +469,7 @@ export function ConfigPlugin() {
                 </span>
               </Chip>
             </If>
-            {/* 启用入口：配置覆盖禁用（含内置插件）或桌面禁用清单 → 可启用。
-                配置覆盖禁用时点击会先弹确认框，确认后管理器透传 clearConfigOverride */}
-            <If cond={plugin.patchDisabled || (!plugin.internal && plugin.disabled)}>
+            <If cond={plugin.patchDisabled || plugin.disabled}>
               <Chip
                 className={actionChip({ busy: rowBusy(plugin.id) })}
                 variant="primary"
@@ -469,7 +483,7 @@ export function ConfigPlugin() {
                 </span>
               </Chip>
             </If>
-            <If cond={!plugin.internal && !plugin.patchDisabled && !plugin.disabled}>
+            <If cond={!plugin.patchDisabled && !plugin.disabled}>
               <Chip
                 className={actionChip({ busy: rowBusy(plugin.id) })}
                 size="sm"

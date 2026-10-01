@@ -59,10 +59,10 @@ describe('configPlugin preset chip', () => {
     expect(source).toContain('plugins.builtin')
   })
 
-  it('withholds uninstall/disable/snapshot from internal plugins', () => {
+  it('allows internal toggles while withholding uninstall/snapshot', () => {
     const source = readFileSync(new URL('../src/ui/config/plugin.tsx', import.meta.url), 'utf8')
-    expect(source, '禁用入口排除内置插件').toContain('cond={!plugin.internal && !plugin.patchDisabled && !plugin.disabled}')
-    expect(source, '启用入口排除内置插件的桌面禁用态').toContain('cond={plugin.patchDisabled || (!plugin.internal && plugin.disabled)}')
+    expect(source, '禁用入口包含内置插件').toContain('cond={!plugin.patchDisabled && !plugin.disabled}')
+    expect(source, '启用入口包含内置插件的桌面禁用态').toContain('cond={plugin.patchDisabled || plugin.disabled}')
     expect(source, '快照入口由 !plugin.internal 守卫').toContain('<If cond={!plugin.internal}>')
   })
 

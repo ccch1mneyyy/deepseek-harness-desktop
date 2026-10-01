@@ -267,6 +267,8 @@
   "plugins.hold_no_target": "没有可安装的目标版本：插件来源被钉死，或 npm 上没有更新的版本。重新打开插件面板刷新版本列表后再试。",
   "plugins.authorize_failed": "授权失败",
   "plugins.disable": "禁用",
+  "plugins.disable_builtin_confirm_title": "禁用内置插件",
+  "plugins.disable_builtin_confirm_desc": "禁用内置插件 {{name}} 可能导致桌面壳或相关功能异常。是否确认禁用？",
   "plugins.enable": "启用",
   "plugins.disabled_badge": "已禁用",
   "plugins.patch_disabled_badge": "已禁用 · 配置覆盖",

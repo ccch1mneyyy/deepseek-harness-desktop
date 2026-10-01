@@ -34,15 +34,14 @@ describe('plugin disable/enable frontend contract', () => {
     expect(source).toContain('\'update\' | \'remove\' | \'disable\' | \'enable\'')
   })
 
-  it('config-plugin.tsx does NOT open a confirmation dialog for disable (reversible action)', () => {
+  it('config-plugin.tsx confirms before disabling a built-in plugin', () => {
     const source = readFileSync(new URL('../src/ui/config/plugin.tsx', import.meta.url), 'utf8')
 
-    // onDisable must not call openDialog — the disable handler is a direct action,
-    // unlike onRemove which confirms via openDialog. We assert the onDisable block
-    // contains no openDialog invocation.
     const onDisableMatch = source.match(/async function onDisable[\s\S]*?\n {2}\}/)
     expect(onDisableMatch).not.toBeNull()
-    expect(onDisableMatch![0]).not.toContain('openDialog')
+    expect(onDisableMatch![0]).toContain('if (plugin?.internal)')
+    expect(onDisableMatch![0]).toContain('await openDialog')
+    expect(onDisableMatch![0]).toContain('plugins.disable_builtin_confirm_desc')
   })
 
   it('the plugin manager owns the single plugin list query and update probe', () => {

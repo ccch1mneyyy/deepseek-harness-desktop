@@ -569,6 +569,8 @@ async fn install_with_cancel(
         ));
     }
 
+    super::disable::preserve_disabled_bundles(&profile_dir(app_handle))?;
+
     // 告知用户安装阶段结束；随后的服务重启由前端 continueAfterPreinstall 负责
     let _ = window.emit(
         PREINSTALL_LOG_EVENT,

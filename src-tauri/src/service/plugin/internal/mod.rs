@@ -291,6 +291,9 @@ fn ensure_fingerprint(app_handle: &AppHandle, internal: &[PreinstallPluginInfo])
     std::fs::read(profile.join("package.json"))
         .unwrap_or_default()
         .hash(&mut hasher);
+    std::fs::read(profile.join("disabled-plugins.json"))
+        .unwrap_or_default()
+        .hash(&mut hasher);
     std::fs::read(profile.join("cordis.yml"))
         .unwrap_or_default()
         .hash(&mut hasher);
@@ -357,6 +360,7 @@ pub(crate) async fn ensure(app_handle: &AppHandle) -> Result<(), String> {
         "PROFILE_NOT_WRITABLE",
     )?;
 
+    super::disable::preserve_disabled_bundles(&profile_dir(app_handle))?;
     repair_loader_state(app_handle)?;
     let outcome =
         receive_current_or_next_flight(|| subscribe_or_start(app_handle, &internal)).await;
@@ -688,7 +692,11 @@ async fn ensure_inner(
     // 本分支要「直接卸载」的孤儿内置插件（安装包名）：其捆绑目录已不存在且仍以
     // `link:`/`file:` 本地依赖形式安装在 profile 里。见下方 bundle 缺失分支的说明。
     let mut orphans: Vec<String> = Vec::new();
+    let disabled = super::disable::load_disabled(&profile);
     for preset in internal {
+        if disabled.contains_key(&preset.id) || disabled.contains_key(installed_name(preset)) {
+            continue;
+        }
         let Some(bundled) = bundled_plugin_dir(app_handle, &preset.id) else {
             // 未找到内置插件目录：release 说明构建期 build:plugins 未打包（发布
             // 缺陷，由 build:plugins 响亮失败）；debug 自动发现 packages/* 中非私有
@@ -1031,6 +1039,7 @@ fn materialize_internal_links(
         });
     }
     materialize_links(profile, &links)?;
+    super::disable::preserve_disabled_bundles(profile)?;
     // pnpm 失败路径已为这些 id 记过安装错误；兜底成功后必须清掉，否则插件面板
     // 会继续显示「安装失败」而实际上插件已就绪（与 verify 的成功路径一致）。
     for (id, _, _) in need {

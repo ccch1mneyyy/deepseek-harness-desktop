@@ -267,6 +267,8 @@
   "plugins.hold_no_target": "No installable target version: the plugin's source is pinned, or npm reports no newer release. Reopen the panel to refresh the version list and try again.",
   "plugins.authorize_failed": "Authorisation failed",
   "plugins.disable": "Disable",
+  "plugins.disable_builtin_confirm_title": "Disable built-in plugin",
+  "plugins.disable_builtin_confirm_desc": "Disabling the built-in plugin {{name}} may cause the desktop shell or related features to malfunction. Confirm disabling?",
   "plugins.enable": "Enable",
   "plugins.disabled_badge": "Disabled",
   "plugins.patch_disabled_badge": "Disabled · Config Override",
