@@ -81,6 +81,12 @@ export default c([
     // c('[data-slot="conversation.session.header"], [data-slot="conversation.composer.bar"], [class*=""], [data-slot="sidebar"] [class$="_footArea"], [data-slot="sidebar"] [class*="_footArea "]', {
     //   display: 'none !important',
     // }),
+    c('[data-slot="conversation.view"] [class$="_scroll"]', {
+      padding: '16px !important',
+    }),
+    c('[class*="_userStack"]', {
+      maxWidth: '100% !important',
+    }),
     c('[data-slot="main"] [data-conversation-scroll]', {
       paddingBottom: '0 !important',
     }),
