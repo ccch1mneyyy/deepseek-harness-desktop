@@ -24,8 +24,9 @@ describe('conversation input dock stack', () => {
   })
 
   it.each([2, 3, 4])('restores non-anchor child %s on hover or focus', (index) => {
-    expect(rules[`${dock}:is(:has(> :not([data-dsh-tauri-worktree-mode-anchor]):hover), :focus-within) > :nth-last-child(${index} of :not([data-dsh-tauri-worktree-mode-anchor]))`]).toEqual({ transform: 'scale(1)' })
+    expect(rules[`${dock}:is(:has(> :not([data-dsh-tauri-worktree-mode-anchor]):hover), :focus-within) > :nth-last-child(${index} of :not([data-dsh-tauri-worktree-mode-anchor]))`]).toEqual({ 'transform': 'scale(1)', 'margin-bottom': '6px', 'overflow': 'visible' })
     expect(rules[`${dock} > :nth-last-child(${index} of :not([data-dsh-tauri-worktree-mode-anchor]))`]).toEqual({
+      'position': 'relative',
       'height': 'auto',
       'min-height': '0',
       'margin-block': '0',
@@ -33,12 +34,12 @@ describe('conversation input dock stack', () => {
       'overflow': 'clip',
       'transform-origin': 'top center',
       'interpolate-size': 'allow-keywords',
-      'transition': 'height 220ms ease, transform 220ms ease',
+      'transition': 'height 220ms ease, transform 220ms ease, margin-bottom 220ms ease',
     })
   })
 
   it('adds no stack declarations to the last child or children earlier than the fourth last', () => {
-    expect(Object.keys(rules).filter(selector => selector.includes(':nth-last-child('))).toHaveLength(9)
+    expect(Object.keys(rules).filter(selector => selector.includes(':nth-last-child(') && !selector.endsWith('::after'))).toHaveLength(9)
     expect(Object.keys(rules).some(selector => selector.includes(':nth-last-child(1 '))).toBe(false)
     expect(Object.keys(rules).some(selector => selector.includes(':nth-last-child(5 '))).toBe(false)
   })

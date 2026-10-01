@@ -24,6 +24,7 @@ export default c([
     const child = `> :nth-last-child(${index} of :not([data-dsh-tauri-worktree-mode-anchor]))`
     return [
       c(`${INPUT_DOCK_SELECTOR} ${child}`, {
+        position: 'relative',
         height: 'auto',
         minHeight: '0',
         marginBlock: '0',
@@ -31,7 +32,7 @@ export default c([
         overflow: 'clip',
         transformOrigin: 'top center',
         interpolateSize: 'allow-keywords',
-        transition: 'height 220ms ease, transform 220ms ease',
+        transition: 'height 220ms ease, transform 220ms ease, margin-bottom 220ms ease',
       }),
       c(`${INPUT_DOCK_SELECTOR}:not(:has(> :not([data-dsh-tauri-worktree-mode-anchor]):hover)):not(:focus-within) ${child}`, {
         height: '12px',
@@ -39,6 +40,16 @@ export default c([
       }),
       c(`${INPUT_DOCK_SELECTOR}:is(:has(> :not([data-dsh-tauri-worktree-mode-anchor]):hover), :focus-within) ${child}`, {
         transform: 'scale(1)',
+        marginBottom: '6px',
+        overflow: 'visible',
+      }),
+      c(`${INPUT_DOCK_SELECTOR}:is(:has(> :not([data-dsh-tauri-worktree-mode-anchor]):hover), :focus-within) ${child}::after`, {
+        content: '""',
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        right: '0',
+        height: '8px',
       }),
     ]
   }),

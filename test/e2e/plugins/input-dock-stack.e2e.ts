@@ -66,10 +66,10 @@ describe('input dock hover geometry', () => {
     const dock = page.locator('[data-slot="conversation.input.dock"]')
     expect(await dock.evaluate(element => element.getBoundingClientRect().height), '收起时不得保留完整卡片占位').toBe(88)
     await page.locator('[data-card="2"]').hover()
-    await expect.poll(() => dock.evaluate(element => element.getBoundingClientRect().height), { message: '展开高度必须完成过渡' }).toBe(192)
+    await expect.poll(() => dock.evaluate(element => element.getBoundingClientRect().height), { message: '展开高度必须完成过渡' }).toBe(204)
     await page.locator('[data-card="0"] button').hover()
     expect(await heights(), '移动到最上层不能回缩').toEqual([64, 64, 64])
-    expect(await page.locator('[data-card="0"]').evaluate(element => getComputedStyle(element).transitionDuration), '必须有过渡动画').toBe('0.22s, 0.22s')
+    expect(await page.locator('[data-card="0"]').evaluate(element => getComputedStyle(element).transitionDuration), '必须有过渡动画').toBe('0.22s, 0.22s, 0.22s')
     await page.mouse.move(0, 0)
     await expect.poll(() => dock.evaluate(element => element.getBoundingClientRect().height), { message: '离开后布局必须重新收紧' }).toBe(88)
   })
@@ -89,9 +89,9 @@ describe('input dock hover geometry', () => {
       })
     }
     await page.mouse.move(last!.x + 100, last!.y + 10)
-    expect((await sample()).some(value => value > 88 && value < 192), '展开必须经过中间高度').toBe(true)
+    expect((await sample()).some(value => value > 88 && value < 204), '展开必须经过中间高度').toBe(true)
     await page.mouse.move(0, 0)
-    expect((await sample()).some(value => value > 88 && value < 192), '收起必须经过中间高度').toBe(true)
+    expect((await sample()).some(value => value > 88 && value < 204), '收起必须经过中间高度').toBe(true)
   })
 
   it.each([3, 4])('ignores an anchor when stacking %s cards', async (count) => {
@@ -102,6 +102,36 @@ describe('input dock hover geometry', () => {
     await expect.poll(() => heights()).toEqual(Array.from({ length: count }).fill(64))
     await page.locator('[data-card="0"] button').hover()
     expect(await heights()).toEqual(Array.from({ length: count }).fill(64))
+  })
+
+  it.each([0, 16])('restores item spacing without collapsing over gaps (%spx inset)', async (inset) => {
+    await render(3, true, inset)
+    await page.locator('[data-card="2"]').hover()
+    await expect.poll(() => heights()).toEqual([64, 64, 64])
+    const cards = await page.locator('[data-card]').evaluateAll(elements => elements.map((element) => {
+      const rect = element.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, bottom: rect.bottom }
+    }))
+    for (let index = 0; index < cards.length - 1; index++) {
+      const card = cards[index]
+      expect(cards[index + 1].y - card.bottom, '展开项目之间应保留 6px 间距，anchor 不增加间距').toBe(6)
+      await page.mouse.move(card.x + card.width / 2, card.bottom + 3)
+      const frames = await page.locator('[data-card]').evaluateAll(async (elements) => {
+        const samples: number[][] = []
+        const start = performance.now()
+        while (performance.now() - start < 300) {
+          samples.push(elements.map(element => element.getBoundingClientRect().height))
+          await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+        }
+        return samples
+      })
+      expect(frames.length, '必须采样间隙悬停期间的连续动画帧').toBeGreaterThan(1)
+      for (const frame of frames)
+        expect(frame, '鼠标停在项目间隙时，每一帧都应保持展开，不得抖动').toEqual([64, 64, 64])
+      expect(await page.locator('[data-card="0"]').evaluate(element => getComputedStyle(element).transform), '间隙必须维持展开状态').toBe('matrix(1, 0, 0, 1, 0, 0)')
+    }
+    await page.mouse.move(cards[0].x - 4, cards[0].bottom + 3)
+    await expect.poll(() => heights(), { message: '间隙两侧空白仍应收起' }).toEqual([11.52, 11.76, 64])
   })
 
   it('keeps the dock expanded while a card has keyboard focus', async () => {
