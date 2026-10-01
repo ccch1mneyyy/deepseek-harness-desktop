@@ -81,7 +81,7 @@ export function SshSection({ t }: SshSectionProps): ReactNode {
 
   return (
     <div className="flex flex-col gap-[12px] max-w-[960px] text-primary" data-testid="ssh-section">
-      <div className="flex flex-wrap items-center gap-[8px]" data-testid="ssh-tabs">
+      <div className="flex flex-wrap justify-between items-center gap-[8px]" data-testid="ssh-tabs">
         <SegmentedControl
           id={SSH_TABS_ID}
           label={t('nav')}
