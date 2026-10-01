@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::utils::{patch_core_file, patch_dsh, PatchOutcome};
 
 const CLIENT: &str = "node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js";
-const MARKER: &str = "function isDshMobileComposer()";
+const MARKER: &str = "isDshMobileComposer() && t.hasAttribute(\"data-composer-input\")";
 const MOBILE: &str = r#"function isDshMobileComposer() {
     return typeof window !== "undefined" && typeof window.matchMedia === "function" && ["(hover: none)", "(any-pointer: coarse)", "(any-hover: none)"].every(query => window.matchMedia(query).matches);
 }
@@ -14,12 +14,24 @@ const ENTER_PATCHED: &str = r#"if (isDshMobileComposer()) return event !== null 
                 if (event !== null && (event.altKey || event.getModifierState("AltGraph") || event.ctrlKey && event.metaKey || event.shiftKey && (event.ctrlKey || event.metaKey))) return true;"#;
 const AUTOFOCUS: &str = "if (locked || editor === null) return;";
 const AUTOFOCUS_PATCHED: &str = "if (locked || editor === null || isDshMobileComposer()) return;";
+const ROOT: &str = "this._updateTags.add(xo), bi(this), this._config.disableEvents";
+// Reattachment commits a saved selection synchronously, before the guarded focus effect.
+const ROOT_PATCHED: &str = "this._updateTags.add(xo), isDshMobileComposer() && t.hasAttribute(\"data-composer-input\") && this._updateTags.add(\"skip-dom-selection\"), bi(this), this._config.disableEvents";
 
 fn patch_source(source: &str) -> PatchOutcome {
     if source.contains(MARKER) {
         return PatchOutcome::AlreadyPatched;
     }
-    if [KEYMAP, ENTER, AUTOFOCUS]
+    if source.contains("function isDshMobileComposer()") {
+        if [ENTER_PATCHED, AUTOFOCUS_PATCHED, ROOT]
+            .iter()
+            .any(|anchor| source.matches(anchor).count() != 1)
+        {
+            return PatchOutcome::AnchorMissing;
+        }
+        return PatchOutcome::Patched(source.replacen(ROOT, ROOT_PATCHED, 1));
+    }
+    if [KEYMAP, ENTER, AUTOFOCUS, ROOT]
         .iter()
         .any(|anchor| source.matches(anchor).count() != 1)
     {
@@ -29,7 +41,8 @@ fn patch_source(source: &str) -> PatchOutcome {
         source
             .replacen(KEYMAP, &format!("{MOBILE}{KEYMAP}"), 1)
             .replacen(ENTER, ENTER_PATCHED, 1)
-            .replacen(AUTOFOCUS, AUTOFOCUS_PATCHED, 1),
+            .replacen(AUTOFOCUS, AUTOFOCUS_PATCHED, 1)
+            .replacen(ROOT, ROOT_PATCHED, 1),
     )
 }
 
@@ -46,7 +59,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> String {
-        format!("{KEYMAP}\n{ENTER}\n}}\n{AUTOFOCUS}\nfocusDraftEditor(editor, revealSelection);\n")
+        format!("{KEYMAP}\n{ENTER}\n}}\n{AUTOFOCUS}\nfocusDraftEditor(editor, revealSelection);\n{ROOT}\n")
     }
 
     #[test]
@@ -57,8 +70,27 @@ mod tests {
         assert!(result.contains(MOBILE));
         assert!(result.contains(ENTER_PATCHED));
         assert!(result.contains(AUTOFOCUS_PATCHED));
+        assert!(result.contains(ROOT_PATCHED));
         assert!(result.contains("focusDraftEditor(editor, revealSelection);"));
         assert_eq!(patch_source(&result), PatchOutcome::AlreadyPatched);
+    }
+
+    #[test]
+    fn upgrades_previous_patch_without_duplicating_guards() {
+        let old = fixture()
+            .replacen(KEYMAP, &format!("{MOBILE}{KEYMAP}"), 1)
+            .replacen(ENTER, ENTER_PATCHED, 1)
+            .replacen(AUTOFOCUS, AUTOFOCUS_PATCHED, 1);
+        let PatchOutcome::Patched(result) = patch_source(&old) else {
+            panic!("not upgraded")
+        };
+        assert!(result.contains(ROOT_PATCHED));
+        assert_eq!(result.matches("function isDshMobileComposer()").count(), 1);
+        assert_eq!(patch_source(&result), PatchOutcome::AlreadyPatched);
+        assert_eq!(
+            patch_source(&old.replace(ROOT, "")),
+            PatchOutcome::AnchorMissing
+        );
     }
 
     #[test]
