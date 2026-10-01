@@ -217,22 +217,46 @@ describe('native mobile sidebar', () => {
     finally { await page.close() }
   })
 
-  it('preserves vertical scrolling, horizontal scrollers and editable controls', async () => {
+  it('preserves native vertical conversation scrolling', async () => {
     const { page, cdp } = await render()
     try {
       await touch(cdp, 'touchStart', 180, 500)
       await touch(cdp, 'touchMove', 185, 300)
       await touch(cdp, 'touchEnd')
-      await expect.poll(() => page.locator('#scroll').evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+      await expect.poll(() => page.locator('#scroll').evaluate(element => element.scrollTop), '纵向手势仍滚动聊天内容').toBeGreaterThan(0)
       expect(await opened(page)).toBe(false)
-      await page.locator('#scroll').evaluate((element) => {
-        element.scrollTop = 0
+    }
+    finally { await page.close() }
+  })
+
+  it('preserves native horizontal scrolling in both directions without opening the sidebar', async () => {
+    const { page, cdp } = await render()
+    try {
+      await page.locator('#horizontal').evaluate((element) => {
+        element.scrollLeft = 100
       })
-      await touch(cdp, 'touchStart', 160, 10)
-      await touch(cdp, 'touchMove', 40, 10)
+      expect(await page.evaluate(() => document.elementFromPoint(80, 9)?.closest('#horizontal')?.id), '原生触摸命中横向滚动区域').toBe('horizontal')
+      await touch(cdp, 'touchStart', 80, 9)
+      await touch(cdp, 'touchMove', 160, 9)
       await touch(cdp, 'touchEnd')
-      await expect.poll(() => page.locator('#horizontal').evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+      await expect.poll(() => page.locator('#horizontal').evaluate(element => element.scrollLeft), '向右滑动交还横向滚动容器').toBeLessThan(100)
       expect(await opened(page)).toBe(false)
+    }
+    finally { await page.close() }
+    const next = await render()
+    try {
+      await touch(next.cdp, 'touchStart', 160, 9)
+      await touch(next.cdp, 'touchMove', 40, 9)
+      await touch(next.cdp, 'touchEnd')
+      await expect.poll(() => next.page.locator('#horizontal').evaluate(element => element.scrollLeft), '向左滑动仍为原生横向滚动').toBeGreaterThan(0)
+      expect(await opened(next.page)).toBe(false)
+    }
+    finally { await next.page.close() }
+  })
+
+  it('leaves native editable control gestures to the input', async () => {
+    const { page, cdp } = await render()
+    try {
       await page.locator('#draft').fill('draft')
       await page.locator('#draft').evaluate((element) => {
         element.style.marginTop = '80px'
