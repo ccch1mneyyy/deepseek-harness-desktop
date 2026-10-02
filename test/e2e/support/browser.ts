@@ -62,7 +62,7 @@ export const CONVERSATION_SESSION = '[data-slot="conversation.session"]'
 export const SIDEBAR_ROW = 'button[class*="panelRow"]'
 
 /** 阻塞式引导弹层选择器 */
-export const APP_MODAL = '[role="dialog"][aria-modal="true"]'
+export const APP_MODAL = '[role="dialog"][aria-modal="true"]:not([data-shortcut-modal="settings"])'
 export const APP_MODAL_CANCEL = 'div[class*="_editorActions"] > button'
 
 // ==========================================
