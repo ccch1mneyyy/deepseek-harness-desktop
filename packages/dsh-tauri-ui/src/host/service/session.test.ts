@@ -1,7 +1,9 @@
+import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { HostContext } from '../types'
 import type { PlanSession } from './session.types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply } from '../apply'
 import { setCurrentHostInstance } from '../config/runtime'
 import { session } from './session'
@@ -11,31 +13,81 @@ interface SetupOptions {
   events?: unknown
   session?: unknown
   loader?: unknown
+  nextTurn?: UserMessage[]
+  nextStep?: UserMessage[]
 }
 
 function turnEnd(kind: string) {
   return { type: 'turn/end', seq: 1, time: 0, data: { turn: 1, reason: { kind } } }
 }
 
-function setup(options: SetupOptions = {}): { followed: Array<{ content: unknown, source: unknown }> } {
-  const followed: Array<{ content: unknown, source: unknown }> = []
+function setup(options: SetupOptions = {}) {
+  const followed: UserMessage[] = []
+  const claimed: UserMessage[] = []
+  const nextTurn = [...options.nextTurn ?? []]
+  const nextStep = [...options.nextStep ?? []]
+  const listeners = new Set<(payload: { agent: typeof agent, message: UserMessage }) => void>()
+  const mutations: Array<{ target: string, removed: UserMessage[], inserted: UserMessage[] }> = []
   const agent = {
     status: options.status ?? 'idle',
     session: options.session ?? { snapshotEvents: () => options.events ?? [turnEnd('completed')] },
-    followup: (message: { content: unknown, source: unknown }) => void followed.push(message),
+    inbox: {
+      nextTurn,
+      nextStep,
+      splice,
+      prepend: (target: 'next-turn' | 'next-step', message: UserMessage) => void splice(target, 0, 0, [message]),
+      append: (target: 'next-turn' | 'next-step', message: UserMessage) => void splice(target, Infinity, 0, [message]),
+      remove(id: UserMessage['id']) {
+        for (const target of ['next-turn', 'next-step'] as const) {
+          const queue = target === 'next-turn' ? nextTurn : nextStep
+          const index = queue.findIndex(message => message.id === id)
+          if (index >= 0) {
+            splice(target, index, 1, [])
+            return true
+          }
+        }
+        return false
+      },
+    },
+    followup(message: UserMessage) {
+      followed.push(message)
+      splice('next-turn', Infinity, 0, [message])
+      agent.status = 'running'
+      // ReactLoopInbox.claim drains next-step, then exactly one FIFO next-turn item.
+      claimed.push(...nextStep.splice(0), ...nextTurn.splice(0, 1))
+    },
   }
-  setCurrentHostInstance({
+  function splice(target: 'next-turn' | 'next-step', start: number, deleteCount: number, inserted: UserMessage[]) {
+    const queue = target === 'next-turn' ? nextTurn : nextStep
+    const removed = queue.splice(start, deleteCount, ...inserted)
+    mutations.push({ target, removed, inserted })
+    for (const message of inserted) {
+      for (const listener of [...listeners])
+        listener({ agent, message })
+    }
+    return removed
+  }
+  const ctx = {
     agents: { get: (id: string) => (id === 'unknown' ? undefined : agent) },
     loader: options.loader ?? {
-      import: async () => ({ createUserMessage: (input: unknown) => input }),
+      import: async () => ({ createUserMessage }),
       unwrapExports: (value: unknown) => value,
     },
+    on(name: string, listener: (payload: { agent: typeof agent, message: UserMessage }) => void) {
+      expect(name).toBe('agent/inbox/inserted')
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
     logger: { warn: () => {} },
-  } as HostContext)
-  return { followed }
+  }
+  setCurrentHostInstance(ctx as HostContext)
+  return { followed, claimed, agent, ctx, listeners, mutations }
 }
 
-afterEach(() => setCurrentHostInstance(undefined))
+afterEach(() => {
+  setCurrentHostInstance(undefined)
+  vi.restoreAllMocks()
+})
 
 const interruptedPlan = [
   { content: '调查根因', status: 'completed' },
@@ -53,7 +105,7 @@ function setupTurn(kind: 'aborted' | 'interrupted' | 'error' = 'aborted') {
     : kind === 'error' ? { kind, error: { message: 'test failure', code: 'UNKNOWN' } } : { kind }
   log.append('turn/end', { turn: 1, reason })
   const followed: Array<{ content: unknown, source: unknown }> = []
-  const agent = { status: 'idle', session: log, followup: (message: { content: unknown, source: unknown }) => void followed.push(message) }
+  const agent = { status: 'idle', session: log, inbox: { nextTurn: [] }, followup: (message: { content: unknown, source: unknown }) => void followed.push(message) }
   const hooks = new Map<string, (payload: unknown, next: () => Promise<unknown>) => unknown>()
   apply({
     agents: { get: () => agent },
@@ -191,6 +243,140 @@ describe('continued turn plan', () => {
 })
 
 describe('session.resume', () => {
+  it('admits the continuation before queued user messages without moving those messages', async () => {
+    const first = createUserMessage({ content: [{ type: 'text', text: '先别发送的任务' }], source: { kind: 'user' } })
+    const second = createUserMessage({ content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } })
+    const { claimed, followed, agent, mutations, listeners } = setup({ events: [turnEnd('aborted')], nextTurn: [first, second] })
+
+    expect(await session.resume('s1')).toEqual({ ok: true })
+
+    expect(claimed).toEqual([expect.objectContaining({
+      role: 'user',
+      content: [{ type: 'text', text: 'Continue the interrupted task from where it stopped. Do not repeat work that is already complete.' }],
+      source: { kind: 'continue' },
+    })])
+    expect(claimed[0]).toBe(followed[0])
+    expect(agent.inbox.nextTurn).toEqual([first, second])
+    expect(agent.inbox.nextTurn[0]).toBe(first)
+    expect(agent.inbox.nextTurn[1]).toBe(second)
+    expect(mutations.flatMap(mutation => mutation.removed)).not.toContain(first)
+    expect(mutations.flatMap(mutation => mutation.removed)).not.toContain(second)
+    expect(listeners.size).toBe(0)
+  })
+
+  it('admits injected next-step context with the continuation while retaining the queued turn', async () => {
+    const queued = createUserMessage({ content: [{ type: 'text', text: '排队任务' }], source: { kind: 'user' } })
+    const context = createUserMessage({ content: [{ type: 'text', text: '运行时上下文' }], source: { kind: 'system-prompt' } })
+    const { agent, claimed, followed } = setup({ events: [turnEnd('interrupted')], nextTurn: [queued], nextStep: [context] })
+
+    expect(await session.resume('s1')).toEqual({ ok: true })
+
+    expect(claimed).toEqual([context, expect.objectContaining({ source: { kind: 'continue' } })])
+    expect(claimed[1]).toBe(followed[0])
+    expect(agent.inbox.nextTurn).toEqual([queued])
+    expect(agent.inbox.nextStep).toEqual([])
+  })
+
+  it('keeps ordinary user followups FIFO after the continuation listener is removed', async () => {
+    const first = createUserMessage({ content: [{ type: 'text', text: '第一项任务' }], source: { kind: 'user' } })
+    const second = createUserMessage({ content: [{ type: 'text', text: '第二项任务' }], source: { kind: 'user' } })
+    const userContinue = createUserMessage({ content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } })
+    const { agent, claimed, listeners } = setup({ events: [turnEnd('aborted')], nextTurn: [first, second] })
+    expect(await session.resume('s1')).toEqual({ ok: true })
+    expect(listeners.size).toBe(0)
+
+    agent.status = 'idle'
+    agent.followup(userContinue)
+
+    expect(claimed).toEqual([expect.objectContaining({ source: { kind: 'continue' } }), first])
+    expect(agent.inbox.nextTurn).toEqual([second, userContinue])
+  })
+
+  it('ignores inserted notifications from another agent or another message', async () => {
+    const first = createUserMessage({ content: [{ type: 'text', text: '排队任务' }], source: { kind: 'user' } })
+    const unrelated = createUserMessage({ content: [{ type: 'text', text: '另一条消息' }], source: { kind: 'user' } })
+    const { agent, claimed, listeners, mutations } = setup({ events: [turnEnd('aborted')], nextTurn: [first] })
+    const followup = agent.followup
+    vi.spyOn(agent, 'followup').mockImplementation((message) => {
+      for (const listener of [...listeners]) {
+        listener({ agent: { ...agent }, message })
+        listener({ agent, message: unrelated })
+      }
+      expect(mutations).toEqual([])
+      followup(message)
+    })
+
+    expect(await session.resume('s1')).toEqual({ ok: true })
+
+    expect(claimed).toEqual([expect.objectContaining({ source: { kind: 'continue' } })])
+    expect(agent.inbox.nextTurn).toEqual([first])
+    expect(listeners.size).toBe(0)
+  })
+
+  it('removes the temporary listener when followup throws', async () => {
+    const queued = createUserMessage({ content: [{ type: 'text', text: '排队任务' }], source: { kind: 'user' } })
+    const { agent, followed, listeners } = setup({ events: [turnEnd('aborted')], nextTurn: [queued] })
+    vi.spyOn(agent, 'followup').mockImplementation(() => {
+      throw new Error('followup failed')
+    })
+
+    expect(await session.resume('s1')).toEqual({ ok: false, code: 500, error: 'Error: followup failed' })
+
+    expect(agent.inbox.nextTurn).toEqual([queued])
+    expect(followed).toEqual([])
+    expect(listeners.size).toBe(0)
+  })
+
+  it.each(['on', 'remove', 'prepend'] as const)('refuses queued continuation when %s is unavailable', async (missing) => {
+    const queued = createUserMessage({ content: [{ type: 'text', text: '排队任务' }], source: { kind: 'user' } })
+    const { agent, ctx, followed, mutations } = setup({ events: [turnEnd('aborted')], nextTurn: [queued] })
+    const unsupportedAgent = { ...agent, inbox: { ...agent.inbox, ...missing === 'on' ? {} : { [missing]: undefined } } }
+    setCurrentHostInstance({ ...ctx, agents: { get: () => unsupportedAgent }, ...missing === 'on' ? { on: undefined } : {} } as HostContext)
+
+    expect(await session.resume('s1')).toEqual({
+      ok: false,
+      code: 500,
+      error: 'TypeError: DSH_CONTINUE_API_MISSING: ctx.on / agent.inbox.remove / agent.inbox.prepend',
+    })
+
+    expect(agent.inbox.nextTurn).toEqual([queued])
+    expect(followed).toEqual([])
+    expect(mutations).toEqual([])
+  })
+
+  it('does not enqueue continuation if the agent starts running during module loading', async () => {
+    const { agent, ctx, followed, listeners } = setup({ events: [turnEnd('aborted')] })
+    ctx.loader = {
+      import: async () => {
+        agent.status = 'running'
+        return { createUserMessage }
+      },
+      unwrapExports: (value: unknown) => value,
+    }
+
+    expect(await session.resume('s1')).toEqual({ ok: false, code: 409, error: '会话状态已变化，请重新尝试继续' })
+
+    expect(followed).toEqual([])
+    expect(agent.inbox.nextTurn).toEqual([])
+    expect(listeners.size).toBe(0)
+  })
+
+  it('does not enqueue continuation if the agent is replaced during module loading', async () => {
+    const { agent, ctx, followed } = setup({ events: [turnEnd('aborted')] })
+    ctx.loader = {
+      import: async () => {
+        ctx.agents.get = () => ({ ...agent })
+        return { createUserMessage }
+      },
+      unwrapExports: (value: unknown) => value,
+    }
+
+    expect(await session.resume('s1')).toEqual({ ok: false, code: 409, error: '会话状态已变化，请重新尝试继续' })
+
+    expect(followed).toEqual([])
+    expect(agent.inbox.nextTurn).toEqual([])
+  })
+
   it('continues a session whose turn was aborted by the user', async () => {
     const { followed } = setup({ events: [{ type: 'turn/start' }, turnEnd('aborted')] })
     expect(await session.resume('s1')).toEqual({ ok: true })

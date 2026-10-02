@@ -1,3 +1,4 @@
+import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { PlatformModuleLoader, SessionResumeOutcome } from '../types'
 import type { CreateUserMessage, PlanSession } from './session.types'
 import { defineService } from 'dsh-tauri'
@@ -65,10 +66,37 @@ async function resumeStoppedTurn(sessionId: string): Promise<SessionResumeOutcom
   if (kind === undefined)
     ctx?.logger?.warn?.(`dsh-tauri-ui: 无法从会话日志判定上一轮结束原因（session ${sessionId}），按可继续处理`)
   const createUserMessage = await loadCreateUserMessage(ctx.loader)
-  agent.followup(createUserMessage({
+  if (ctx.agents.get(sessionId) !== agent || agent.status !== 'idle')
+    return { ok: false, code: 409, error: '会话状态已变化，请重新尝试继续' }
+  const message = createUserMessage({
     content: [{ type: 'text', text: CONTINUE_INSTRUCTION }],
     source: CONTINUE_SOURCE,
-  }))
+  })
+  const inbox = agent.inbox
+  if (!Array.isArray(inbox?.nextTurn) || typeof agent.followup !== 'function')
+    throw new TypeError('DSH_CONTINUE_API_MISSING: agent.inbox.nextTurn / agent.followup')
+  if (inbox.nextTurn.length === 0) {
+    agent.followup(message)
+    return { ok: true }
+  }
+  if (typeof ctx.on !== 'function' || typeof inbox.remove !== 'function' || typeof inbox.prepend !== 'function')
+    throw new TypeError('DSH_CONTINUE_API_MISSING: ctx.on / agent.inbox.remove / agent.inbox.prepend')
+  let prioritized = false
+  // followup 追加后同步通知，再唤醒 driver；只移动本次继续消息，避免首轮领取排队用户消息。
+  const dispose = ctx.on('agent/inbox/inserted', (payload: { agent: unknown, message: UserMessage }) => {
+    if (prioritized || payload.agent !== agent || payload.message.id !== message.id)
+      return
+    prioritized = true
+    const index = inbox.nextTurn.findIndex((pending: UserMessage) => pending.id === message.id)
+    if (index > 0 && inbox.remove(message.id))
+      inbox.prepend('next-turn', payload.message)
+  })
+  try {
+    agent.followup(message)
+  }
+  finally {
+    dispose()
+  }
   return { ok: true }
 }
 
