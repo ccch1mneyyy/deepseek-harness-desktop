@@ -211,14 +211,12 @@ export function ConfigDebug() {
               variant="secondary"
               value={info?.service_url ?? '-'}
               aria-label={t('ui.service_url')}
-              className="font-mono text-xs flex-1 rounded-md"
+              className="font-mono text-xs flex-1"
             />
             <Button
               size="sm"
               variant="ghost"
               isIconOnly
-              className="rounded-md"
-
               onPress={() => onCopyServiceUrl()}
               aria-label={t('buttons.copy')}
             >
@@ -227,7 +225,6 @@ export function ConfigDebug() {
             <Button
               size="sm"
               variant="ghost"
-              className="rounded-md"
               isIconOnly
               onPress={store.harness.openBrowser}
               isDisabled={busyAction !== null}
@@ -243,7 +240,7 @@ export function ConfigDebug() {
           <Button
             size="sm"
             variant="tertiary"
-            className="flex-1 rounded-md"
+            className="flex-1"
             onPress={store.harness.restart}
             isDisabled={busyAction !== null}
           >
@@ -253,7 +250,7 @@ export function ConfigDebug() {
           <Button
             size="sm"
             variant="danger"
-            className="flex-1 rounded-md"
+            className="flex-1"
             onPress={store.harness.shutdown}
             isDisabled={busyAction !== null}
           >
@@ -290,7 +287,7 @@ export function ConfigDebug() {
                 size="sm"
                 variant="ghost"
                 isIconOnly
-                className="size-6 min-w-6 rounded-md"
+                className="size-6 min-w-6"
                 aria-label={t('app.reveal_dir')}
                 onPress={() => onRevealDataDir()}
               >
@@ -346,13 +343,13 @@ export function ConfigDebug() {
               variant="secondary"
               value={String(port)}
               onChange={e => setPortInput(Number(e.target.value))}
-              className="w-24 h-8 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-24 h-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               aria-label={t('ui.port')}
             />
             <Button
               size="sm"
               variant="primary"
-              className="rounded-md h-8"
+              className="h-8"
               onPress={() => onSavePort(port)}
             >
               {t('buttons.save')}
@@ -368,13 +365,13 @@ export function ConfigDebug() {
               value={heapValue}
               placeholder={t('ui.heap_limit_auto')}
               onChange={e => setHeapInput(e.target.value)}
-              className="w-24 h-8 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-24 h-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               aria-label={t('ui.heap_limit')}
             />
             <Button
               size="sm"
               variant="primary"
-              className="rounded-md h-8"
+              className="h-8"
               onPress={() => onSaveHeap(parsedHeap)}
             >
               {t('buttons.save')}
@@ -390,14 +387,14 @@ export function ConfigDebug() {
             className="w-[80px]"
             aria-label={t('ui.language')}
           >
-            <Select.Trigger data-testid="dsh-config-language-select" className="rounded-md min-h-8! h-8 py-0 items-center">
+            <Select.Trigger data-testid="dsh-config-language-select" className="min-h-8! h-8 py-0 items-center">
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
-            <Select.Popover className="rounded-md">
+            <Select.Popover>
               <ListBox>
-                <ListBox.Item data-testid="dsh-config-language-option-zh" className="rounded-md min-h-8!" id="zh-CN" textValue={t('ui.languages.zh')}>{t('ui.languages.zh')}</ListBox.Item>
-                <ListBox.Item data-testid="dsh-config-language-option-en" className="rounded-md min-h-8!" id="en-US" textValue={t('ui.languages.en')}>{t('ui.languages.en')}</ListBox.Item>
+                <ListBox.Item data-testid="dsh-config-language-option-zh" className="min-h-8!" id="zh-CN" textValue={t('ui.languages.zh')}>{t('ui.languages.zh')}</ListBox.Item>
+                <ListBox.Item data-testid="dsh-config-language-option-en" className="min-h-8!" id="en-US" textValue={t('ui.languages.en')}>{t('ui.languages.en')}</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -411,15 +408,15 @@ export function ConfigDebug() {
             className="w-[80px]"
             aria-label={t('ui.zoom')}
           >
-            <Select.Trigger className="rounded-md min-h-8! h-8 py-0 items-center">
+            <Select.Trigger className="min-h-8! h-8 py-0 items-center">
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
-            <Select.Popover className="rounded-md">
+            <Select.Popover>
               <ListBox>
                 {ZOOM_OPTIONS.map(zoomFactor => (
                   <ListBox.Item
-                    className="rounded-md min-h-8!"
+                    className="min-h-8!"
                     id={String(zoomFactor)}
                     key={zoomFactor}
                     textValue={`${Math.round(zoomFactor * 100)}%`}

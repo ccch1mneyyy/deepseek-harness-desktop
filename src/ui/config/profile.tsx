@@ -400,7 +400,6 @@ export function ConfigProfile() {
                     </Checkbox.Content>
                   </Checkbox>
                   <Chip
-                    className="rounded-md"
                     size="sm"
                     onClick={(event) => {
                       event.stopPropagation()
@@ -410,7 +409,7 @@ export function ConfigProfile() {
                     {t('backup.manage')}
                   </Chip>
                   <Chip
-                    className={`rounded-md${busy ? ' cursor-not-allowed opacity-50' : ' cursor-pointer'}`}
+                    className={busy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
                     color="accent"
                     size="sm"
                     onClick={(event) => {
@@ -422,7 +421,7 @@ export function ConfigProfile() {
                     {t('profiles.clone')}
                   </Chip>
                   <Chip
-                    className={`rounded-md${busy ? ' cursor-not-allowed opacity-50' : ' cursor-pointer'}`}
+                    className={busy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
                     variant="primary"
                     color="danger"
                     size="sm"
@@ -452,7 +451,7 @@ export function ConfigProfile() {
                   <Input
                     autoFocus
                     variant="secondary"
-                    className="h-8 flex-1 rounded-md"
+                    className="h-8 flex-1"
                     placeholder={t('profiles.name_placeholder')}
                     value={name}
                     onChange={e => setName(e.target.value)}
@@ -461,13 +460,13 @@ export function ConfigProfile() {
                         commitCreate()
                     }}
                   />
-                  <Button size="sm" variant="tertiary" className="h-8 rounded-md" onPress={cancelCreate}>
+                  <Button size="sm" variant="tertiary" className="h-8" onPress={cancelCreate}>
                     {t('profiles.create_cancel')}
                   </Button>
                   <Button
                     size="sm"
                     variant="primary"
-                    className="h-8 rounded-md"
+                    className="h-8"
                     isDisabled={!name.trim() || createNameHint !== null || busy}
                     onPress={commitCreate}
                   >
@@ -486,7 +485,7 @@ export function ConfigProfile() {
             <Button
               onClick={startCreate}
               variant="tertiary"
-              className="flex w-full rounded-md"
+              className="flex w-full"
               isDisabled={busy}
             >
               <Plus className="size-3.5" />
@@ -520,7 +519,7 @@ export function ConfigProfile() {
                 <Input
                   autoFocus
                   variant="secondary"
-                  className="h-8 rounded-md w-full my-2"
+                  className="h-8 w-full my-2"
                   placeholder={t('profiles.clone_name_placeholder')}
                   value={cloneName}
                   onChange={e => setCloneName(e.target.value)}
@@ -542,11 +541,10 @@ export function ConfigProfile() {
                 )}
               </AlertDialog.Body>
               <AlertDialog.Footer>
-                <Button className="rounded-md" variant="tertiary" onPress={() => setCloning(null)}>
+                <Button variant="tertiary" onPress={() => setCloning(null)}>
                   {t('profiles.clone_cancel')}
                 </Button>
                 <Button
-                  className="rounded-md"
                   variant="primary"
                   isDisabled={!cloneName.trim() || cloneNameHint !== null || busy}
                   onPress={commitClone}

@@ -1,11 +1,3 @@
-/**
- * shell-theme-alignment.test.ts — 壳层主题与 dsh alias token 的对齐契约。
- *
- * HeroUI 的 `@theme inline` 会把语义变量（`--accent`、`--surface` …）内联进 Tailwind
- * 工具类，所以壳层只需改写品牌主色 `--accent`：HeroUI 官方 variables.css 已按
- * `data-theme` 提供明暗两套取值，多写反而会让组件外观偏离官方。这里把「只改
- * accent、其余语义变量一律不覆盖」钉死。取值同源：官方 design-platform.css。
- */
 import { describe, expect, it } from 'vitest'
 import { readSource } from './setup/read-source'
 
@@ -37,7 +29,6 @@ const herouiSemanticTokens = [
   'separator',
   'link',
   'scrollbar-thumb',
-  'backdrop',
 ]
 
 function declares(block: string, token: string) {
@@ -52,7 +43,7 @@ describe('壳层主题对齐 dsh alias token', () => {
     expect(lightTheme).toMatch(/^\s*--accent-foreground:\s*#ffffff;/m)
   })
 
-  it('除 brand-primary 外不覆盖任何 HeroUI 语义变量，保持官方明暗取值', () => {
+  it('除品牌主色和蒙版外不覆盖 HeroUI 语义变量，保持官方明暗取值', () => {
     const overridden = herouiSemanticTokens.filter(
       token => declares(darkTheme, token) || declares(lightTheme, token),
     )

@@ -70,16 +70,15 @@ export function CoreUpgradeProfileDialog(props: CoreUpgradeProfileDialogProps) {
               </TextField>
             </AlertDialog.Body>
             <AlertDialog.Footer className="justify-end">
-              <Chip className="rounded-md cursor-pointer" color="warning" variant="soft" onClick={() => disclosure.confirm({ mode: 'ignore' })}>
+              <Chip className="cursor-pointer" color="warning" variant="soft" onClick={() => disclosure.confirm({ mode: 'ignore' })}>
                 <TriangleExclamationFill width={12} />
                 {t('core.breaking_ignore')}
               </Chip>
               <div className="flex flex-row items-center gap-2">
-                <Button className="rounded-md" variant="tertiary" onPress={disclosure.cancel}>
+                <Button variant="tertiary" onPress={disclosure.cancel}>
                   {t('buttons.cancel')}
                 </Button>
                 <Button
-                  className="rounded-md"
                   variant="primary"
                   isDisabled={!profileId}
                   onPress={confirmProfile}

@@ -146,7 +146,7 @@ export function ConfigBackup({ onBack }: ConfigBackupProps) {
 
   return (
     <div className="space-y-3 pl-4">
-      <Button variant="tertiary" className="h-8 rounded-md" onPress={onBack}>
+      <Button variant="tertiary" className="h-8" onPress={onBack}>
         <ArrowLeft className="size-3.5" />
         <span>{t('backup.back_to_profiles')}</span>
       </Button>
@@ -156,7 +156,6 @@ export function ConfigBackup({ onBack }: ConfigBackupProps) {
       <div className="flex flex-col gap-3">
         <Button
           variant="primary"
-          className="rounded-md"
           isDisabled={busy}
           onPress={handleCreate}
         >
@@ -217,7 +216,7 @@ export function ConfigBackup({ onBack }: ConfigBackupProps) {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-7 rounded-md"
+                        className="h-7"
                         isDisabled={busy}
                         onPress={() => handleRestore(backup.timestamp)}
                       >
@@ -229,14 +228,14 @@ export function ConfigBackup({ onBack }: ConfigBackupProps) {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-7 rounded-md"
+                        className="h-7"
                         isDisabled={busy}
                         onPress={() => handleRestoreAsNew(backup.timestamp)}
                       >
                         {restoring ? t('backup.restoring') : t('backup.restore_as_new')}
                       </Button>
                       <Chip
-                        className={`rounded-md${deleting ? ' cursor-not-allowed opacity-50' : ' cursor-pointer'}`}
+                        className={deleting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
                         variant="primary"
                         color="danger"
                         size="sm"

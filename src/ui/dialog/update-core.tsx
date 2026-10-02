@@ -113,7 +113,7 @@ export function DownloadCoreDialog(props: DownloadCoreDialogProps) {
             </AlertDialog.Body>
             <AlertDialog.Footer>
               <If cond={error}>
-                <Button className="rounded-md" variant="tertiary" onPress={disclosure.cancel}>
+                <Button variant="tertiary" onPress={disclosure.cancel}>
                   {t('core.download_close')}
                 </Button>
               </If>

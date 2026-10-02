@@ -88,14 +88,12 @@ export function DesktopUpdateDialog(props: DesktopUpdateDialogProps) {
             <AlertDialog.Footer>
               <Button
                 variant="tertiary"
-                className="rounded-md"
                 onPress={disclosure.cancel}
               >
                 {t('update.later')}
               </Button>
               <Button
                 variant="primary"
-                className="rounded-md"
                 isDisabled={updateInfo == null}
                 onPress={handlePrimary}
               >

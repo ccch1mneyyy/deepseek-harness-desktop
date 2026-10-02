@@ -327,7 +327,7 @@ export function ConfigCore() {
           <Button
             size="sm"
             variant="tertiary"
-            className="h-7 shrink-0 rounded-md text-xs"
+            className="h-7 shrink-0 text-xs"
             isDisabled={busy || refreshing}
             aria-label={t('core.refresh')}
             onPress={onRefresh}
@@ -400,7 +400,7 @@ export function ConfigCore() {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-6 w-6 shrink-0 rounded-md p-0"
+                        className="h-6 w-6 shrink-0 p-0"
                         isDisabled={busy}
                         aria-label={t('core.open_dir')}
                         onClick={(event) => {
@@ -441,7 +441,7 @@ export function ConfigCore() {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-7 rounded-md text-xs"
+                        className="h-7 text-xs"
                         isDisabled={busy}
                         onClick={(event) => {
                           event.stopPropagation()
@@ -457,7 +457,7 @@ export function ConfigCore() {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-7 rounded-md text-xs"
+                        className="h-7 text-xs"
                         isDisabled={busy}
                         onClick={(event) => {
                           event.stopPropagation()
@@ -473,7 +473,7 @@ export function ConfigCore() {
                       <Button
                         size="sm"
                         variant="tertiary"
-                        className="h-7 rounded-md text-xs"
+                        className="h-7 text-xs"
                         isDisabled={busy}
                         onClick={(event) => {
                           event.stopPropagation()

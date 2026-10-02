@@ -61,7 +61,7 @@ function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRe
 
   return (
     <Card
-      className={`h-[124px] gap-1 rounded-lg bg-panel2 p-3 shadow-none transition-colors ${plugin.unsupported ? 'opacity-60' : 'hover:border-line-strong'}`}
+      className={`h-[124px] gap-1 bg-panel2 p-3 shadow-none transition-colors ${plugin.unsupported ? 'opacity-60' : 'hover:border-line-strong'}`}
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="grid size-6 shrink-0 place-items-center rounded-md bg-info/10 text-info">
@@ -108,7 +108,7 @@ function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRe
           isIconOnly
           size="sm"
           variant="ghost"
-          className="size-6 shrink-0 rounded-md text-muted"
+          className="size-6 shrink-0 text-muted"
           aria-label={t('preinstall.open_repo', { name: plugin.name })}
           onPress={() => onOpenRepo(plugin.id)}
         >
@@ -157,7 +157,7 @@ function LogPanel({ logs }: { logs: readonly string[] }) {
           size="sm"
           variant="ghost"
           isIconOnly
-          className="size-6 shrink-0 rounded-md"
+          className="size-6 shrink-0"
           aria-label={t('buttons.copy')}
           onPress={copyLogs}
         >
@@ -351,7 +351,7 @@ export function PreinstallSetup() {
                               {preinstall.loadError}
                             </p>
                             <Button
-                              className="h-8 rounded-md"
+                              className="h-8"
                               size="sm"
                               variant="primary"
                               onPress={() => void store.preinstall.load()}
@@ -397,14 +397,14 @@ export function PreinstallSetup() {
                   {/* 操作区：有变更 → 弱「跳过」+ 主「确认」；无变更 → 主按钮独占「跳过」，避免重复入口 */}
                   <div className="flex items-center justify-end gap-2">
                     <If cond={hasChanges}>
-                      <Button className="h-8 rounded-md" size="sm" variant="tertiary" data-testid="dsh-setup-preinstall-skip" onPress={handleSkip} isDisabled={installing}>
+                      <Button className="h-8" size="sm" variant="tertiary" data-testid="dsh-setup-preinstall-skip" onPress={handleSkip} isDisabled={installing}>
                         {t('preinstall.skip')}
                       </Button>
                     </If>
                     <If cond={!hasChanges}>
                       <Then>
                         <Button
-                          className="h-8 rounded-md"
+                          className="h-8"
                           size="sm"
                           variant="primary"
                           data-testid="dsh-setup-preinstall-skip"
@@ -416,7 +416,7 @@ export function PreinstallSetup() {
                       </Then>
                       <Else>
                         <Button
-                          className="h-8 rounded-md"
+                          className="h-8"
                           size="sm"
                           variant="primary"
                           onPress={handleConfirm}
@@ -443,11 +443,11 @@ export function PreinstallSetup() {
                     </div>
                     <LogPanel logs={preinstall.logs} />
                     <div className="flex items-center justify-end gap-2">
-                      <Button className="h-8 rounded-md" size="sm" variant="tertiary" onPress={handleSkip} isDisabled={installing}>
+                      <Button className="h-8" size="sm" variant="tertiary" onPress={handleSkip} isDisabled={installing}>
                         {t('preinstall.skip')}
                       </Button>
                       <Button
-                        className="h-8 rounded-md"
+                        className="h-8"
                         size="sm"
                         variant="primary"
                         onPress={handleConfirm}
@@ -518,11 +518,11 @@ export function PreinstallSetup() {
 
                   <LogPanel logs={preinstall.logs} />
                   <div className="flex items-center justify-end gap-2">
-                    <Button className="h-8 rounded-md" size="sm" variant="tertiary" onPress={handleSkip} isDisabled={granting}>
+                    <Button className="h-8" size="sm" variant="tertiary" onPress={handleSkip} isDisabled={granting}>
                       {t('preinstall.skip')}
                     </Button>
                     <Button
-                      className="h-8 rounded-md"
+                      className="h-8"
                       size="sm"
                       variant="primary"
                       onPress={() => void handleGrant(approvals)}
@@ -552,7 +552,7 @@ export function PreinstallSetup() {
             {/* 取消安装：网络抖动/限流（429）时可能长时间卡在重试，给用户退出入口 */}
             <div className="flex items-center justify-center">
               <Button
-                className="h-8 rounded-md"
+                className="h-8"
                 size="sm"
                 variant="tertiary"
                 onPress={() => void manager.cancel()}

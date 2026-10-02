@@ -22,7 +22,6 @@ import { toast } from '@/utils/toast'
 
 /** 操作 chip 的样式变体：busy 时禁止点击并降低透明度，否则可点击。 */
 const actionChip = tv({
-  base: 'rounded-md',
   variants: {
     busy: {
       true: 'cursor-not-allowed opacity-50',
@@ -392,7 +391,7 @@ export function ConfigPlugin() {
                     isIconOnly
                     size="sm"
                     variant="ghost"
-                    className="size-6 shrink-0 rounded-md text-danger"
+                    className="size-6 shrink-0 text-danger"
                     aria-label={t('plugins.abnormal_tooltip')}
                   >
                     <CircleExclamation />
@@ -580,7 +579,6 @@ export function ConfigPlugin() {
               <Button
                 size="sm"
                 variant="primary"
-                className="rounded-md"
                 onPress={store.preinstall.open}
                 isDisabled={store.preinstall.installing}
               >
@@ -602,7 +600,7 @@ export function ConfigPlugin() {
             <div className="flex items-center gap-2 px-1">
               <Input
                 variant="secondary"
-                className="h-8 flex-1 rounded-md font-mono text-xs"
+                className="h-8 flex-1 font-mono text-xs"
                 placeholder={t('plugins.install_placeholder')}
                 aria-label={t('plugins.install_placeholder')}
                 value={installRef}
@@ -615,7 +613,7 @@ export function ConfigPlugin() {
               <Button
                 size="sm"
                 variant="tertiary"
-                className="h-8 shrink-0 rounded-md"
+                className="h-8 shrink-0"
                 isDisabled={installRef.trim() === ''}
                 onPress={() => void onInstall()}
               >

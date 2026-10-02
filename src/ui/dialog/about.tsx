@@ -53,7 +53,7 @@ export function DesktopAboutDialog(props: DesktopAboutDialogProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="rounded-md h-8"
+                    className="h-8"
                     onPress={() => {
                       if (about?.repo)
                         void invoke('open_external_url', { url: about.repo })

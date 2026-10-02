@@ -463,7 +463,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
     >
       <If cond={onToggleSidebar != null && tauriEnabled}>
         <Button
-          className="rounded-lg size-7"
+          className="size-7"
           isIconOnly
           size="sm"
           variant="ghost"
@@ -485,7 +485,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
               时禁用而不是留着点了没反应的死按钮，与左侧侧边栏开关同一取舍）。 */}
           <Dropdown>
             <Button
-              className="rounded-lg h-6 text-[12.5px] px-1.5"
+              className="h-6 text-[12.5px] px-1.5"
               size="sm"
               variant="ghost"
               aria-label={t('menu.file')}
@@ -493,10 +493,9 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
             >
               {t('menu.file')}
             </Button>
-            <Dropdown.Popover className="rounded-md min-w-55" data-testid="dsh-navbar-menu-popover">
+            <Dropdown.Popover className="min-w-55" data-testid="dsh-navbar-menu-popover">
               <Dropdown.Menu>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="new-window"
                   data-testid="dsh-navbar-item-new-window"
                   textValue={t('menu.new_window')}
@@ -505,7 +504,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <Label>{t('menu.new_window')}</Label>
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="new-chat"
                   data-testid="dsh-navbar-item-new-chat"
                   isDisabled={onNewChat == null}
@@ -515,7 +513,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <ShortcutLabel label={t('menu.new_chat')} hint={shortcutHint(shortcutRows, 'session.new')} />
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="open-folder"
                   data-testid="dsh-navbar-item-open-folder"
                   isDisabled={onOpenFolder == null}
@@ -525,7 +522,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <ShortcutLabel label={t('menu.open_folder')} hint={shortcutHint(shortcutRows, 'workspace.add')} />
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="close"
                   data-testid="dsh-navbar-item-close"
                   textValue={t('menu.close')}
@@ -534,7 +530,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <Label>{t('menu.close')}</Label>
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="quit"
                   data-testid="dsh-navbar-item-quit"
                   textValue={t('menu.quit')}
@@ -547,7 +542,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
           </Dropdown>
           <Dropdown>
             <Button
-              className="rounded-lg h-6 text-[12.5px] px-1.5"
+              className="h-6 text-[12.5px] px-1.5"
               size="sm"
               variant="ghost"
               aria-label={t('menu.view')}
@@ -555,14 +550,13 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
             >
               {t('menu.view')}
             </Button>
-            <Dropdown.Popover className="rounded-md min-w-55" data-testid="dsh-navbar-menu-popover">
+            <Dropdown.Popover className="min-w-55" data-testid="dsh-navbar-menu-popover">
               <Dropdown.Menu>
                 <Dropdown.Section>
                   {DSH_VIEW_COMMANDS.map(item => (
                     <Dropdown.Item
                       key={item.command}
                       id={item.command}
-                      className="rounded-md"
                       isDisabled={onViewCommand == null || !shortcutRows.some(row => row.id === item.command && row.available === true)}
                       textValue={t(item.label)}
                       onAction={() => onViewCommand?.(item.command)}
@@ -572,13 +566,13 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   ))}
                 </Dropdown.Section>
                 <Dropdown.Section>
-                  <Dropdown.Item id="zoom-in" className="rounded-md" textValue={t('menu.zoom_in')} onAction={() => store.setting.zoom('increase')}>
+                  <Dropdown.Item id="zoom-in" textValue={t('menu.zoom_in')} onAction={() => store.setting.zoom('increase')}>
                     <ShortcutLabel label={t('menu.zoom_in')} hint="Ctrl + +" />
                   </Dropdown.Item>
-                  <Dropdown.Item id="zoom-out" className="rounded-md" textValue={t('menu.zoom_out')} onAction={() => store.setting.zoom('decrease')}>
+                  <Dropdown.Item id="zoom-out" textValue={t('menu.zoom_out')} onAction={() => store.setting.zoom('decrease')}>
                     <ShortcutLabel label={t('menu.zoom_out')} hint="Ctrl + -" />
                   </Dropdown.Item>
-                  <Dropdown.Item id="zoom-reset" className="rounded-md" textValue={t('menu.actual_size')} onAction={() => store.setting.zoom('reset')}>
+                  <Dropdown.Item id="zoom-reset" textValue={t('menu.actual_size')} onAction={() => store.setting.zoom('reset')}>
                     <ShortcutLabel label={t('menu.actual_size')} hint="Ctrl + 0" />
                   </Dropdown.Item>
                 </Dropdown.Section>
@@ -588,7 +582,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
           <Dropdown isOpen={runMenuOpen} onOpenChange={setRunMenuOpen}>
             {' '}
             <Button
-              className="rounded-lg h-6 text-[12.5px] px-1.5"
+              className="h-6 text-[12.5px] px-1.5"
               size="sm"
               variant="ghost"
               aria-label={t('menu.run')}
@@ -596,12 +590,11 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
             >
               {t('menu.run')}
             </Button>
-            <Dropdown.Popover className="rounded-md min-w-55" data-testid="dsh-navbar-menu-popover">
+            <Dropdown.Popover className="min-w-55" data-testid="dsh-navbar-menu-popover">
               <Dropdown.Menu>
                 {CONFIG_TABS.map(item => (
                   <Dropdown.Item
                     key={item.id}
-                    className="rounded-md"
                     id={item.id}
                     data-testid={`dsh-navbar-item-${item.id}`}
                     textValue={t(item.labelKey)}
@@ -621,7 +614,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                           onPointerUp={event => event.stopPropagation()}
                         >
                           <Button
-                            className="rounded-md size-6 hover:bg-background-tertiary"
+                            className="size-6 hover:bg-background-tertiary"
                             isIconOnly
                             size="sm"
                             variant="ghost"
@@ -641,7 +634,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
           </Dropdown>
           <Dropdown>
             <Button
-              className="rounded-lg h-6 text-[12.5px] px-1.5"
+              className="h-6 text-[12.5px] px-1.5"
               size="sm"
               variant="ghost"
               aria-label={t('app.help')}
@@ -649,10 +642,9 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
             >
               {t('app.help')}
             </Button>
-            <Dropdown.Popover className="rounded-md min-w-55" data-testid="dsh-navbar-menu-popover">
+            <Dropdown.Popover className="min-w-55" data-testid="dsh-navbar-menu-popover">
               <Dropdown.Menu>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="keyboard-shortcuts"
                   data-testid="dsh-navbar-item-keyboard-shortcuts"
                   isDisabled={onOpenShortcuts == null}
@@ -662,7 +654,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <ShortcutLabel label={t('menu.keyboard_shortcuts')} hint={shortcutHint(shortcutRows, 'shortcuts.open')} />
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="copy-run-logs"
                   data-testid="dsh-navbar-item-copy-run-logs"
                   textValue={t('menu.run_logs')}
@@ -671,7 +662,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <Label>{t('menu.run_logs')}</Label>
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="check-update"
                   data-testid="dsh-navbar-item-check-update"
                   textValue={t('menu.check_update')}
@@ -685,7 +675,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   </span>
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="about"
                   data-testid="dsh-navbar-item-about"
                   textValue={t('menu.about')}
@@ -694,7 +683,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <Label>{t('menu.about')}</Label>
                 </Dropdown.Item>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="documentation"
                   data-testid="dsh-navbar-item-documentation"
                   textValue={t('menu.documentation')}
@@ -752,7 +740,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
 
       <If cond={!IS_MACOS}>
         <Button
-          className="rounded-lg size-7"
+          className="size-7"
           isIconOnly
           size="sm"
           variant="ghost"
@@ -763,7 +751,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
         </Button>
 
         <Button
-          className="rounded-lg size-7"
+          className="size-7"
           isIconOnly
           size="sm"
           variant="ghost"
@@ -778,7 +766,7 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
         </Button>
 
         <Button
-          className="rounded-lg size-7 transition-colors enabled:hover:bg-danger/16 enabled:hover:text-danger"
+          className="size-7 transition-colors enabled:hover:bg-danger/16 enabled:hover:text-danger"
           isIconOnly
           size="sm"
           variant="ghost"

@@ -55,7 +55,7 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
       <ConnectDialog remote={remote} />
       <Dropdown>
         <Button
-          className="rounded-lg h-7 text-[12.5px] px-1.5 ml-1 gap-1.5"
+          className="h-7 text-[12.5px] px-1.5 ml-1 gap-1.5"
           size="sm"
           variant="ghost"
           aria-label={t('remote.switcher')}
@@ -70,16 +70,15 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
             />
           </If>
         </Button>
-        <Dropdown.Popover className="rounded-lg w-72!">
+        <Dropdown.Popover className="w-72!">
           <Dropdown.Menu>
             <If cond={!available}>
-              <Dropdown.Item className="rounded-md" id="remote-degraded" isDisabled textValue={t('remote.degraded')}>
+              <Dropdown.Item id="remote-degraded" isDisabled textValue={t('remote.degraded')}>
                 <Description className="text-warning">{t('remote.degraded')}</Description>
               </Dropdown.Item>
             </If>
             <Dropdown.Section aria-label={t('remote.section_local')}>
               <Dropdown.Item
-                className="rounded-md"
                 id="remote-local"
                 textValue={t('remote.local')}
                 onAction={() => { remote.backToLocal() }}
@@ -99,7 +98,7 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
             </Dropdown.Section>
             <Dropdown.Section aria-label={t('remote.section_machines')}>
               <If cond={machines.length === 0}>
-                <Dropdown.Item className="rounded-md" id="remote-empty" isDisabled textValue={t('remote.empty')}>
+                <Dropdown.Item id="remote-empty" isDisabled textValue={t('remote.empty')}>
                   <Description>{t('remote.empty')}</Description>
                 </Dropdown.Item>
               </If>
@@ -110,7 +109,6 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
                 return (
                   <Dropdown.Item
                     key={machine.id}
-                    className="rounded-md"
                     id={`remote-${machine.id}`}
                     textValue={machine.name}
                     isDisabled={!available || pendingId !== null}
@@ -165,7 +163,6 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
               {/* 活动远端连接的一键断开（视图先回本地，再向引擎发断开） */}
               <If cond={activeId !== null}>
                 <Dropdown.Item
-                  className="rounded-md"
                   id="remote-disconnect-active"
                   textValue={t('remote.disconnect_active')}
                   onAction={() => {
@@ -180,7 +177,6 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
                 </Dropdown.Item>
               </If>
               <Dropdown.Item
-                className="rounded-md"
                 id="remote-manage"
                 isDisabled={onManage == null}
                 textValue={t('remote.manage')}
@@ -192,7 +188,6 @@ export function RemoteSwitcher({ onChange, visible = true, onManage, onSync }: {
                 </span>
               </Dropdown.Item>
               <Dropdown.Item
-                className="rounded-md"
                 id="remote-sync"
                 isDisabled={onSync == null}
                 textValue={t('remote.sync')}

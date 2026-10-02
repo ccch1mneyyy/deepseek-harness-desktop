@@ -21,11 +21,51 @@
   -webkit-app-region: drag;
 }
 
-/* 主题变量：默认深色，html[data-theme="light"] 切换到浅色。
-   取值与官方 dsw alias token（design-platform.css）逐项一致。
-   HeroUI 只改写品牌主色 --accent，其余语义变量保持官方默认（官方 variables.css
-   已按 data-theme 提供明暗两套取值）。 */
+@theme inline {
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+  --radius-4xl: calc(var(--radius) * 2);
+}
+
+@layer components {
+  .button {
+    border-radius: var(--radius-md);
+  }
+
+  .button--sm,
+  .tooltip,
+  .close-button {
+    border-radius: var(--radius-sm);
+  }
+
+  .button--lg,
+  .card,
+  .dropdown__popover,
+  .select__popover,
+  .popover,
+  .toast {
+    border-radius: var(--radius-lg);
+  }
+
+  .menu-item,
+  .list-box-item {
+    border-radius: var(--radius-md);
+  }
+
+  .checkbox__control {
+    border-radius: var(--radius-xs);
+  }
+
+  .checkbox__control::before {
+    border-radius: inherit;
+  }
+}
+
 :root {
+  --radius: 16px;
+  --field-radius: 12px;
+  --backdrop: rgba(0, 0, 0, 0.5);
   /* === 壳层自有 token === */
   --color-canvas: #151517;             /* bg-base (bluish-950) */
   --color-panel: #1b1b1c;              /* specific-sidebar-fill (bluish-900) */
@@ -66,6 +106,7 @@
 }
 
 html[data-theme="light"] {
+  --backdrop: rgba(0, 0, 0, 0.24);
   --color-canvas: #ffffff;             /* bg-base (bluish-00) */
   --color-panel: #f9fafb;              /* specific-sidebar-fill (bluish-50) */
   --color-panel-2: #f5f6f7;            /* bg-module-platform / selector (bluish-60) */
