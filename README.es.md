@@ -44,8 +44,7 @@
 - 🗂️ **Configuración por perfiles** — Separá plugins y ajustes; los perfiles no son un sandbox de seguridad del sistema operativo.
 - ⌨️ **Integración con la terminal** — Shims administrados de `dsh` / `pnpm`, no una instalación global del núcleo por npm.
 - 🐾 **Mascotas de escritorio** — Recursos Pets / Codex, importación de paquetes y actividad de conversaciones; los recursos predefinidos son remotos.
-
-**Settings → Appearance** ofrece las paletas Default, Nord, Solarized, Forest, Amber, GitHub, GitHub Dimmed y GitHub High Contrast, que siguen la preferencia de tema claro, oscuro o del sistema. El modo terminal conserva las fuentes originales y oculta la barra lateral; el botón superior izquierdo permite mostrarla. Al activar la transparencia nativa, aparece un deslizador de opacidad del 20 al 100% y una opción para mantener opaca el área de sesión. El texto y los menús permanecen opacos. Elegir el 100% no desactiva la transparencia nativa. Para activar o desactivar la transparencia nativa, cerrá la aplicación por completo y volvé a abrirla; el efecto depende del sistema de ventanas. Restore defaults restablece todos los ajustes de apariencia.
+- 🎨 **Personalización** — 8 paletas, modo terminal y transparencia nativa, con restauración de valores predeterminados en un clic.
 
 ## Plugins integrados
 
