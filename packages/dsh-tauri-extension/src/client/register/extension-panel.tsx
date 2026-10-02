@@ -1,6 +1,8 @@
-import type { ClientContext, PanelHandle } from 'dsh-tauri/client'
-import { Icon, Panel, Puzzle } from 'dsh-tauri-ui/client'
-import { definePanel, defineRegister } from 'dsh-tauri/client'
+import type { ClientContext, PanelHandle, SlotRegistry } from 'dsh-tauri/client'
+import type { ReactElement } from 'react'
+import { cssr, Icon, mountStyle, Panel, Puzzle, SlotOutlet } from 'dsh-tauri-ui/client'
+import { definePanel, defineRegister, hidePanel } from 'dsh-tauri/client'
+import { useSyncExternalStore } from 'react'
 import { ExtensionPanel } from '../components/extension-panel'
 import { MARKET_SERVICE_NAME, PANEL_ACTION_ORDER, PANEL_ID } from '../constants'
 import { locale } from '../locales'
@@ -8,14 +10,46 @@ import { currentScope, hostsMarketPanel, readMarket } from '../service/market'
 import { store } from '../store'
 import { chooseWorkspace, sessionSnapshotOf, workspaceSnapshotOf } from './extension-panel.utils'
 
+const pluginsStyle = cssr.c([
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel]', { height: 'auto', padding: 0, overflow: 'visible' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header[data-window-drag]', { paddingTop: 0 }),
+])
+
 export const extensionPanelFeature = defineRegister<ClientContext>((controller, ctx, adapter) => {
   let panel: PanelHandle | undefined
-  // 同一份 profile 也服务普通浏览器标签：只有桌面 iframe 收编市场，浏览器保留其设置页入口。
   const embedMarket = hostsMarketPanel(currentScope())
+  const slots = adapter.service<SlotRegistry>('slots')
+  let restorePlugins: (() => void) | undefined
 
-  // 市场收进本插槽后，它自带的设置页入口就是重复入口，撤下它；撤下前记住原状态，
-  // 服务被撤下或本插件卸载时由 inject 返回的 disposer 还原。服务由另一个客户端插件
-  // 发布，apply 顺序不保证，所以用 inject 等它到位。
+  function hasPlugins(): boolean {
+    return typeof SlotOutlet === 'function'
+      && typeof slots?.subscribe === 'function'
+      && typeof slots?.entriesOfSlot === 'function'
+      && slots.entriesOfSlot('main').some(entry => entry.options.key === 'plugins')
+  }
+
+  function subscribePlugins(listener: () => void): () => void {
+    if (typeof slots?.subscribe !== 'function')
+      return () => {}
+    return slots.subscribe('main', listener)
+  }
+
+  function syncPlugins(): void {
+    if (hasPlugins()) {
+      restorePlugins ??= hidePanel(ctx, 'plugins', PANEL_ID)
+    }
+    else {
+      restorePlugins?.()
+      restorePlugins = undefined
+    }
+  }
+
+  controller.add(mountStyle(pluginsStyle, `${PANEL_ID}-plugins`, PANEL_ID))
+  if (typeof slots?.subscribe === 'function')
+    controller.add(subscribePlugins(syncPlugins))
+  syncPlugins()
+  controller.add(() => restorePlugins?.())
+
   ctx.inject([MARKET_SERVICE_NAME], () => {
     if (!embedMarket)
       return
@@ -27,7 +61,7 @@ export const extensionPanelFeature = defineRegister<ClientContext>((controller, 
     return () => face.setSettingsVisible(restore)
   })
 
-  const createSkill = async (): Promise<void> => {
+  async function createSkill(): Promise<void> {
     const id = chooseWorkspace(
       sessionSnapshotOf(adapter.sessions.list?.getSnapshot()),
       workspaceSnapshotOf(adapter.workspaces.list?.getSnapshot()),
@@ -48,11 +82,17 @@ export const extensionPanelFeature = defineRegister<ClientContext>((controller, 
     locale: locale.NS,
     label: () => locale.text('extension'),
     icon: props => <Icon as={Puzzle} size={props.size} />,
-    render: () => (
-      <Panel>
-        <ExtensionPanel createSkill={createSkill} market={embedMarket ? readMarket(ctx) : undefined} />
-      </Panel>
-    ),
+    render: function ExtensionPage() {
+      const available = useSyncExternalStore(subscribePlugins, hasPlugins, hasPlugins)
+      let plugins: ReactElement | undefined
+      if (available && typeof SlotOutlet === 'function')
+        plugins = <div data-dsh-extension-plugins><SlotOutlet slotKey="main" opts={{ entryKey: 'plugins' }} /></div>
+      return (
+        <Panel>
+          <ExtensionPanel plugins={plugins} createSkill={createSkill} market={embedMarket ? readMarket(ctx) : undefined} />
+        </Panel>
+      )
+    },
   })
   controller.add(panel.dispose)
 })
