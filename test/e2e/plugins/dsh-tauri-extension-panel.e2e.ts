@@ -35,7 +35,7 @@ describe('extension panel official plugins composition', () => {
       expect(await officialPage.locator(':scope > header[data-window-drag]').evaluate(el => getComputedStyle(el).paddingTop)).toBe('0px')
 
       await tabs.getByRole('tab', { name: '技能', exact: true }).click()
-      const skillsPanel = app.frame.getByRole('tabpanel', { name: '技能', exact: true })
+      const skillsPanel = app.frame.getByRole('tabpanel', { name: '技能', exact: true, includeHidden: true })
       await expect.poll(() => skillsPanel.isVisible()).toBe(true)
       await expect.poll(() => app.frame.locator('[data-plugin-panel]').count(), { message: '离开插件 Tab 必须卸载官方页面，不能仅 hidden' }).toBe(0)
 
