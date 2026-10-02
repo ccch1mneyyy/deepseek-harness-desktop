@@ -8,10 +8,16 @@ import { contextMenuFeature } from './context-menu'
 
 const { menuProps } = vi.hoisted(() => ({ menuProps: vi.fn() }))
 
-vi.mock('dsh-tauri/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('dsh-tauri/client')>()
+vi.mock('dsh-tauri/client', async () => {
+  const lodash = await import('../../../../dsh-tauri/src/client/modules/lodash-es')
+  const { defineLocale } = await import('../../../../dsh-tauri/src/client/locale')
+  const { ofetch } = await import('../../../../dsh-tauri/src/client/request')
+  const { invoke } = await import('../../../../dsh-tauri/src/client/service/invoke')
   return {
-    ...actual,
+    ...lodash,
+    defineLocale,
+    ofetch,
+    invoke,
     defineRegister: (setup: RegisterSetup<ClientContext>) => function (this: ClientContext) {
       const disposers: Array<() => void> = []
       const controller = {
