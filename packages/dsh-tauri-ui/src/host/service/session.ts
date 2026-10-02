@@ -1,4 +1,4 @@
-import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Inbox } from '@deepseek-ai/dsh-agent'
 import type { PlatformModuleLoader, SessionResumeOutcome } from '../types'
 import type { CreateUserMessage, PlanSession } from './session.types'
 import { defineService } from 'dsh-tauri'
@@ -79,23 +79,47 @@ async function resumeStoppedTurn(sessionId: string): Promise<SessionResumeOutcom
     agent.followup(message)
     return { ok: true }
   }
-  if (typeof ctx.on !== 'function' || typeof inbox.remove !== 'function' || typeof inbox.prepend !== 'function')
-    throw new TypeError('DSH_CONTINUE_API_MISSING: ctx.on / agent.inbox.remove / agent.inbox.prepend')
-  let prioritized = false
-  // followup 追加后同步通知，再唤醒 driver；只移动本次继续消息，避免首轮领取排队用户消息。
-  const dispose = ctx.on('agent/inbox/inserted', (payload: { agent: unknown, message: UserMessage }) => {
-    if (prioritized || payload.agent !== agent || payload.message.id !== message.id)
+  const splice: Inbox['splice'] = inbox.splice
+  const descriptor = Object.getOwnPropertyDescriptor(inbox, 'splice')
+  if (typeof splice !== 'function' || (descriptor
+    ? !descriptor.configurable && (!('value' in descriptor) || !descriptor.writable)
+    : !Object.isExtensible(inbox))) {
+    throw new TypeError('DSH_CONTINUE_API_MISSING: writable agent.inbox.splice')
+  }
+  let intercepted = false
+  let installed = false
+  const restore = () => {
+    if (!installed)
       return
-    prioritized = true
-    const index = inbox.nextTurn.findIndex((pending: UserMessage) => pending.id === message.id)
-    if (index > 0 && inbox.remove(message.id))
-      inbox.prepend('next-turn', payload.message)
+    if (descriptor)
+      Object.defineProperty(inbox, 'splice', descriptor)
+    else
+      Reflect.deleteProperty(inbox, 'splice')
+    installed = false
+  }
+  // 在 driver 首次插入前调整本次继续的位置；通知重入前还原，避免删除产生 canceled 记录。
+  const prioritizedSplice: Inbox['splice'] = function (this: Inbox, target, start, deleteCount, inserted) {
+    if (this === inbox && target === 'next-turn' && deleteCount === 0 && inserted.length === 1 && inserted[0].id === message.id) {
+      intercepted = true
+      restore()
+      return splice.call(this, target, 0, deleteCount, inserted)
+    }
+    return splice.call(this, target, start, deleteCount, inserted)
+  }
+  Object.defineProperty(inbox, 'splice', {
+    configurable: descriptor?.configurable ?? true,
+    enumerable: descriptor?.enumerable ?? false,
+    writable: true,
+    value: prioritizedSplice,
   })
+  installed = true
   try {
     agent.followup(message)
+    if (!intercepted)
+      throw new TypeError('DSH_CONTINUE_API_MISSING: followup must use agent.inbox.splice')
   }
   finally {
-    dispose()
+    restore()
   }
   return { ok: true }
 }
