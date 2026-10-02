@@ -99,7 +99,7 @@
   "menu.quit": "Quit",
   "menu.documentation": "Documentation",
   "about.title": "About",
-  "about.powered_by": "Powered by {{name}}",
+  "about.powered_by": "Powered by the community & DeepSeek Harness",
   "about.release_date": "Release date",
   "about.github": "GitHub",
   "about.source_code": "Source Code",

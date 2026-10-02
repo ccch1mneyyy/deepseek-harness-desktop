@@ -99,7 +99,7 @@
   "menu.quit": "退出",
   "menu.documentation": "文档",
   "about.title": "关于",
-  "about.powered_by": "由 {{name}} 驱动",
+  "about.powered_by": "由社区 & DeepSeek Harness 驱动",
   "about.release_date": "发布时间",
   "about.github": "GitHub",
   "about.source_code": "源代码",
