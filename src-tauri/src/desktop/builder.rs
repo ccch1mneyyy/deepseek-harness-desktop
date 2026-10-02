@@ -1316,6 +1316,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::get_desktop_about,
         crate::bridge::open_external_url,
         crate::bridge::read_clipboard_image,
+        crate::bridge::read_clipboard_text,
         crate::bridge::write_clipboard_text,
         crate::desktop::window::create_app_window,
         crate::desktop::builder::sync_view_menu,

@@ -56,6 +56,9 @@ const ALLOWED_INVOKE_CMDS = new Set([
   'list_preset_pets',
   'remote_bridge_ping',
   'remote_open_window',
+  // 右键菜单「粘贴」的原生读取：WKWebView 的 navigator.clipboard.readText() 拿不到授权，
+  // 帧内据此命令读取系统剪贴板纯文本（命令侧无参、只读，见 bridge/clipboard.rs）。
+  'read_clipboard_text',
 ])
 
 export function useInvokeIframe(iframeRef: RefObject<HTMLIFrameElement | null>): void {

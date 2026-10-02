@@ -1,3 +1,5 @@
+import { invoke } from 'dsh-tauri/client'
+
 export async function writeClipboard(value: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
     try {
@@ -10,6 +12,16 @@ export async function writeClipboard(value: string): Promise<boolean> {
 }
 
 export async function readClipboard(): Promise<string | null> {
+  // macOS 的 WKWebView 从不授权 Web Clipboard 读取，右键「粘贴」因此在调用前就注定失败
+  // （issue #858）；桌面载体的读取能力同步判定后直接走原生命令，不靠捕获拒绝兜底。
+  if ('dshDesktop' in globalThis) {
+    try {
+      return await invoke<string | null>('read_clipboard_text')
+    }
+    catch {
+      return null
+    }
+  }
   if (navigator.clipboard?.readText) {
     try {
       return await navigator.clipboard.readText()

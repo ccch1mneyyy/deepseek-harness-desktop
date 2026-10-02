@@ -49,6 +49,20 @@ describe('macOS native menu', () => {
     expect(nativeMenuSource).toContain('help_menu.set_as_help_menu_for_nsapp()?')
   })
 
+  it('binds the standard editing selectors so ⌘X/⌘C/⌘V/⌘A/⌘Z reach the webview (issue #860)', () => {
+    expect(submenuItems('desktop-edit-menu')).toEqual([
+      '&undo',
+      '&redo',
+      '&edit_separator',
+      '&cut',
+      '&copy',
+      '&paste',
+      '&select_all',
+    ])
+    for (const item of ['undo', 'redo', 'cut', 'copy', 'paste', 'select_all'])
+      expect(builderSource).toContain(`PredefinedMenuItem::${item}(app, Some(&crate::config::i18n::t("menu.${item}")))`)
+  })
+
   it('places Profiles, Plugins, Core and Restart in the Run submenu', () => {
     expect(submenuItems('desktop-run-menu')).toEqual([
       '&profiles',

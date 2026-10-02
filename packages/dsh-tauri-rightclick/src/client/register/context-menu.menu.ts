@@ -26,6 +26,7 @@ import {
 import { readClipboard } from '../utils/clipboard'
 import { pasteInto, replaceSelection, selectAll, selectSurface } from '../utils/editable'
 import { externalUrl, selectedUrl } from '../utils/url'
+import { redoShortcutLabel, shortcutLabel } from './context-menu.utils'
 import { officialAction } from './locate'
 import { officialSelect } from './official-menu'
 
@@ -134,7 +135,7 @@ export function buildSessionMenu(
   }
 
   composer.split()
-  composer.add(locale.text('refresh'), reload, 'Ctrl+R')
+  composer.add(locale.text('refresh'), reload, shortcutLabel('R'))
 }
 
 export function buildUngroupedMenu(composer: MenuComposer): void {
@@ -153,7 +154,7 @@ export function buildUngroupedMenu(composer: MenuComposer): void {
       await archiveAll(composer, sessionIds)
   })
   composer.split()
-  composer.add(locale.text('refresh'), reload, 'Ctrl+R')
+  composer.add(locale.text('refresh'), reload, shortcutLabel('R'))
 }
 
 export function buildWorkspaceMenu(
@@ -207,20 +208,20 @@ export function buildWorkspaceMenu(
   }, '', true)
 
   composer.split()
-  composer.add(locale.text('refresh'), reload, 'Ctrl+R')
+  composer.add(locale.text('refresh'), reload, shortcutLabel('R'))
 }
 
 export function buildEditableMenu(composer: MenuComposer, editable: HTMLElement, selection: string): void {
   composer.add(locale.text('undo'), () => {
     editable.focus()
     if (!document.execCommand('undo'))
-      throw new Error(locale.text('useUndoShortcut'))
-  }, 'Ctrl+Z')
+      throw new Error(locale.text('useUndoShortcut', { key: shortcutLabel('Z') }))
+  }, shortcutLabel('Z'))
   composer.add(locale.text('redo'), () => {
     editable.focus()
     if (!document.execCommand('redo'))
-      throw new Error(locale.text('useRedoShortcut'))
-  }, 'Ctrl+Y')
+      throw new Error(locale.text('useRedoShortcut', { key: redoShortcutLabel() }))
+  }, redoShortcutLabel())
 
   composer.split()
   composer.add(locale.text('cut'), async () => {
@@ -228,21 +229,21 @@ export function buildEditableMenu(composer: MenuComposer, editable: HTMLElement,
       await composer.copyText(selection, locale.text('cutDone'))
     if (!replaceSelection(editable, ''))
       throw new Error(locale.text('editPositionUnknown'))
-  }, 'Ctrl+X')
-  composer.add(locale.text('copy'), () => composer.copyText(selection, locale.text('copied')), 'Ctrl+C')
+  }, shortcutLabel('X'))
+  composer.add(locale.text('copy'), () => composer.copyText(selection, locale.text('copied')), shortcutLabel('C'))
   composer.add(locale.text('paste'), async () => {
     const clipboard = await readClipboard()
     if (clipboard === null)
-      throw new Error(locale.text('clipboardReadFailed'))
+      throw new Error(locale.text('clipboardReadFailed', { key: shortcutLabel('V') }))
     if (!pasteInto(editable, clipboard))
       throw new Error(locale.text('editPositionUnknown'))
-  }, 'Ctrl+V')
+  }, shortcutLabel('V'))
 
   composer.split()
-  composer.add(locale.text('selectAll'), () => selectAll(editable), 'Ctrl+A')
+  composer.add(locale.text('selectAll'), () => selectAll(editable), shortcutLabel('A'))
 
   composer.split()
-  composer.add(locale.text('refresh'), reload, 'Ctrl+R')
+  composer.add(locale.text('refresh'), reload, shortcutLabel('R'))
 }
 
 export function buildSelectionMenu(
@@ -252,7 +253,7 @@ export function buildSelectionMenu(
   surface: HTMLElement | null,
 ): void {
   if (selection)
-    composer.add(locale.text('copySelectedText'), () => composer.copyText(selection, locale.text('copied')), 'Ctrl+C')
+    composer.add(locale.text('copySelectedText'), () => composer.copyText(selection, locale.text('copied')), shortcutLabel('C'))
 
   const url = externalUrl(link?.href || '') || selectedUrl(selection)
   if (url) {
@@ -266,11 +267,11 @@ export function buildSelectionMenu(
   if (surfaceNode) {
     if (selection || url)
       composer.split()
-    composer.add(locale.text('selectCurrentContent'), () => selectSurface(surfaceNode), 'Ctrl+A')
+    composer.add(locale.text('selectCurrentContent'), () => selectSurface(surfaceNode), shortcutLabel('A'))
   }
 
   composer.split()
-  composer.add(locale.text('refresh'), reload, 'Ctrl+R')
+  composer.add(locale.text('refresh'), reload, shortcutLabel('R'))
 }
 
 // --- internal ---
