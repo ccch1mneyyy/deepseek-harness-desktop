@@ -119,6 +119,8 @@ describe('opt-in Node startup trace', () => {
     const root = fixture()
     const result = await runFixture(root, `
       const http = require('node:http')
+      const { performance } = require('node:perf_hooks')
+      const loopStarted = performance.eventLoopUtilization()
       const auxiliary = http.createServer()
       auxiliary.listen(0, '127.0.0.1', () => {
         function spin_${privateToken}() {
@@ -129,6 +131,8 @@ describe('opt-in Node startup trace', () => {
         new (require('node:vm').Script)('const until = Date.now() + 100; while (Date.now() < until) Math.random();', { filename: 'node:${privateToken}' }).runInThisContext()
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250)
         setTimeout(() => {
+          const idleMs = performance.eventLoopUtilization(loopStarted).idle
+          process.stdout.write('fixture-idle-ms=' + idleMs + '\\n')
           const main = http.createServer((_request, response) => response.end(process.env.PRIVATE_SESSION_CONTENT))
           main.listen(Number(process.env.DSH_WEB_PORT), '127.0.0.1', () => {
             http.get('http://127.0.0.1:' + process.env.DSH_WEB_PORT + '/?token=' + process.argv[2], response => {
@@ -153,7 +157,9 @@ describe('opt-in Node startup trace', () => {
     expect(report.nonCpuWallMs).toBeGreaterThan(100)
     expect(report.maxTimerGapMs).toBeGreaterThanOrEqual(450)
     expect(report.preloadAtMs).toBeGreaterThanOrEqual(0)
-    expect(report.eventLoop.idleMs).toBeGreaterThan(30)
+    const idleLine = result.output.split('\n').find(line => line.startsWith('fixture-idle-ms='))
+    expect(idleLine).toMatch(/^fixture-idle-ms=\d+(?:\.\d+)?$/)
+    expect(report.eventLoop.idleMs).toBeCloseTo(Number(idleLine?.slice('fixture-idle-ms='.length)), 3)
     expect(report.profile.samples.length).toBeGreaterThan(10)
     expect(report.profile.timeDeltas.length).toBe(report.profile.samples.length)
     expect(report.profile.nodes.some(node => node.callFrame.url === 'node_modules/startup-fixture/index.cjs')).toBe(true)
