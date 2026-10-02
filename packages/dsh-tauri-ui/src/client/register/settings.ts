@@ -1,6 +1,7 @@
-import type { ClientContext } from 'dsh-tauri/client'
+import type { PropsStore, StoreHandle } from '@deepseek-ai/dsh-client-store'
+import type { ClientContext, SlotRegistry } from 'dsh-tauri/client'
 import { SlotOutlet } from '@deepseek-ai/dsh-client-ui-renderer'
-import { defineRegister } from 'dsh-tauri/client'
+import { defineRegister, useWatchImmediate } from 'dsh-tauri/client'
 import {
   SETTINGS_LAUNCHER_SLOT,
   SETTINGS_REGISTRANT,
@@ -14,9 +15,15 @@ import { SettingsSidebar } from '../ui/settings-sidebar'
 import { SettingsTrigger } from '../ui/settings-trigger'
 import { detectMobileDevice } from './settings.utils'
 
-const SETTINGS_SHORTCUT_EFFECT = 'dsh-tauri-ui: settings launcher shortcut (Ctrl+, hint)'
+const SETTINGS_SHORTCUT_EFFECT = 'dsh-tauri-ui: settings launcher shortcut'
+const SETTINGS_OPEN_RELAY_ID = 'dsh-tauri-ui-settings-open-relay'
 
-export const registerSettings = defineRegister<ClientContext>((controller, ctx) => {
+type SettingsShell = StoreHandle<{ open: boolean, activeId?: string }, {
+  open: (draft: { open: boolean }) => void
+  close: (draft: { open: boolean }) => void
+}>
+
+export const registerSettings = defineRegister<ClientContext>((controller, ctx, adapter) => {
   if (typeof SlotOutlet !== 'function') {
     console.warn(
       '[dsh-tauri-ui] <SlotOutlet> unavailable (renderer patch missing) — settings sidebar disabled, official dialog stays.',
@@ -28,11 +35,17 @@ export const registerSettings = defineRegister<ClientContext>((controller, ctx) 
     return
 
   controller.add(
-    ctx.slots.inject(SETTINGS_SHELL_OVERLAY_SLOT, () =>
-      ctx.slots.register(
+    ctx.slots.inject(SETTINGS_SHELL_OVERLAY_SLOT, () => {
+      const disposeSidebar = ctx.slots.register(
         { name: SETTINGS_SHELL_OVERLAY_SLOT, id: SETTINGS_SIDEBAR_ID, registrant: SETTINGS_REGISTRANT, inject: () => ({}) } as never,
         SettingsSidebar as never,
-      )),
+      )
+      const disposeRelay = registerSettingsOpenRelay(adapter.service<SlotRegistry>('slots'))
+      return () => {
+        disposeRelay()
+        disposeSidebar()
+      }
+    }),
   )
   controller.add(
     ctx.slots.inject(SETTINGS_SIDEBAR_SLOT as never, () =>
@@ -47,16 +60,56 @@ export const registerSettings = defineRegister<ClientContext>((controller, ctx) 
       return () => store.settings.setLauncherAvailable(false)
     }),
   )
-  controller.add(ctx.effect(() => publishLauncherShortcut(ctx), SETTINGS_SHORTCUT_EFFECT))
+  controller.add(ctx.effect(() => publishLauncherShortcut(adapter.service<ShortcutsLike>('shortcuts')), SETTINGS_SHORTCUT_EFFECT))
 })
 
-/**
- * 官方启动器座位的「Ctrl+,」提示：座位拿的是 ownerProps，读不到服务，
- * 这里把 `settings.open` 的生效按键投影进自己的 store（用户改键后重发）。
- * 核心没有快捷键服务（老核心）时不写值，座位不显示提示。
- */
-function publishLauncherShortcut(ctx: ClientContext): () => void {
-  const catalog = (ctx.get('shortcuts') as ShortcutsLike | undefined)?.catalog
+function registerSettingsOpenRelay(slots?: SlotRegistry): () => void {
+  if (typeof slots?.entries !== 'function' || typeof slots.subscribe !== 'function')
+    return () => {}
+
+  let handle: SettingsShell | undefined
+  let disposeSeat: (() => void) | undefined
+  function refresh(): void {
+    const next = slots!.entries(SETTINGS_SIDEBAR_SLOT as never).find(entry =>
+      entry.registrant !== SETTINGS_REGISTRANT
+      && typeof entry.store === 'object' && entry.store !== null
+      && typeof entry.store.create === 'function'
+      && typeof entry.store.spec?.actions?.open === 'function'
+      && typeof entry.store.spec?.actions?.close === 'function',
+    )?.store as SettingsShell | undefined
+    if (next === handle)
+      return
+    disposeSeat?.()
+    handle = next
+    disposeSeat = next
+      ? slots!.register(
+          { name: SETTINGS_SHELL_OVERLAY_SLOT, id: SETTINGS_OPEN_RELAY_ID, registrant: SETTINGS_REGISTRANT, store: next } as never,
+          SettingsOpenRelay as never,
+        )
+      : undefined
+  }
+  refresh()
+  const off = slots.subscribe(SETTINGS_SIDEBAR_SLOT as never, refresh)
+  return () => {
+    off()
+    disposeSeat?.()
+  }
+}
+
+function SettingsOpenRelay({ useStore, actions }: PropsStore<SettingsShell>): null {
+  const state = useStore(state => state)
+  // 被遮蔽的官方座位仍持有 settings.open；消费后复位，让下一次打开请求继续生效。
+  useWatchImmediate([state.open, state.activeId], () => {
+    if (state.open !== true)
+      return
+    store.settings.openAt(typeof state.activeId === 'string' ? state.activeId : undefined)
+    actions.close()
+  })
+  return null
+}
+
+function publishLauncherShortcut(shortcuts?: ShortcutsLike): () => void {
+  const catalog = shortcuts?.catalog
   const snapshot = catalog?.getSnapshot
   if (typeof snapshot !== 'function')
     return () => {}
@@ -72,7 +125,6 @@ function publishLauncherShortcut(ctx: ClientContext): () => void {
   }
 }
 
-/** 目录里 `settings.open` 的生效按键；缺行或键位为空即视为没有提示。 */
 function shortcutOf(rows: unknown): { keys: readonly string[], aria?: string } | undefined {
   if (!Array.isArray(rows))
     return undefined
@@ -90,11 +142,9 @@ function shortcutOf(rows: unknown): { keys: readonly string[], aria?: string } |
   return undefined
 }
 
-interface CatalogLike {
-  getSnapshot?: () => unknown
-  subscribe?: (listener: () => void) => () => void
-}
-
 interface ShortcutsLike {
-  catalog?: CatalogLike
+  catalog?: {
+    getSnapshot?: () => unknown
+    subscribe?: (listener: () => void) => () => void
+  }
 }

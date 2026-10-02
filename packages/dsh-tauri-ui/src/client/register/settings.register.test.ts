@@ -18,12 +18,9 @@ vi.mock('../store', () => ({ store: { settings: mocks.settings } }))
 vi.mock('../ui/settings-sidebar', () => ({ SettingsSidebar: () => null }))
 vi.mock('../ui/settings-trigger', () => ({ SettingsTrigger: () => null }))
 vi.mock('@deepseek-ai/dsh-client-ui-renderer', () => ({ SlotOutlet: () => null }))
-vi.mock('dsh-tauri/client', () => ({
-  defineRegister: (setup: (controller: unknown, ctx: unknown) => void) =>
-    function registerEffect(this: unknown) {
-      setup({ add: (): void => {} }, this)
-      return (): void => {}
-    },
+vi.mock('dsh-tauri/client', async () => ({
+  ...await import('../../../../dsh-tauri/src/client/register'),
+  ...await import('../../../../dsh-tauri/src/client/modules/reause'),
 }))
 
 interface MatchMediaHost {
@@ -32,6 +29,7 @@ interface MatchMediaHost {
 
 const host = globalThis as unknown as MatchMediaHost
 const originalWindow = host.window
+const disposers: Array<() => void> = []
 
 /** 手机端才有三条设备查询全部成立；触屏为主但另接鼠标的设备缺 `(any-hover: none)`。 */
 const MOBILE_DEVICE = {
@@ -53,9 +51,14 @@ function stubDevice(answers: Record<string, boolean>): void {
 }
 
 afterEach(() => {
+  for (const dispose of disposers.splice(0))
+    dispose()
   host.window = originalWindow
   mocks.settings.launcherAvailable = false
   mocks.settings.launcherShortcut = undefined
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 /** 用最小 slots 面记录注入点：inject 只登记，register 由激活回调按需触发。 */
@@ -65,8 +68,17 @@ function activate(shortcuts?: unknown) {
   const ctx = {
     slots: {
       inject(key: string, callback: () => unknown) {
-        injected.push({ key, activate: callback })
-        return (): void => {}
+        let dispose: (() => void) | undefined
+        injected.push({
+          key,
+          activate() {
+            const result = callback()
+            if (typeof result === 'function')
+              dispose = result as () => void
+            return result
+          },
+        })
+        return () => dispose?.()
       },
       register(options: { name: string }) {
         registered.push(options.name)
@@ -76,10 +88,10 @@ function activate(shortcuts?: unknown) {
     effect(callback: () => () => void) {
       return callback()
     },
-    get: () => shortcuts,
+    get: (name: string) => name === 'slots' ? ctx.slots : shortcuts,
   }
 
-  ;(registerSettings as unknown as (this: unknown) => void).call(ctx)
+  disposers.push(registerSettings.call(ctx))
 
   return { injected, registered }
 }
