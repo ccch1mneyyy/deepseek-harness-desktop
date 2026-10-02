@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { redoShortcutLabel, shortcutLabel } from './context-menu.utils'
 
+vi.mock('dsh-tauri-ui/client', () => import('../../../../dsh-tauri-ui/src/client/utils/device'))
+
 function stubUserAgent(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
@@ -27,6 +29,23 @@ describe('shortcutLabel', () => {
     vi.stubGlobal('navigator', undefined)
 
     expect(shortcutLabel('R')).toBe('Ctrl+R')
+  })
+})
+
+describe('mobile shortcut hints', () => {
+  it.each(['Linux; Android 15', 'iPhone; CPU iPhone OS 18_0 like Mac OS X', 'Macintosh; Intel Mac OS X 10_15_7'])('hides every desktop key on a touch-only device (%s)', (platform) => {
+    stubUserAgent(`Mozilla/5.0 (${platform})`)
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) })
+    for (const key of ['Z', 'X', 'C', 'V', 'A', 'R'])
+      expect(shortcutLabel(key)).toBe('')
+    expect(redoShortcutLabel()).toBe('')
+  })
+
+  it('retains keyboard hints when a touch device has a secondary mouse', () => {
+    stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    vi.stubGlobal('window', { matchMedia: (query: string) => ({ matches: query !== '(any-hover: none)' }) })
+    expect(shortcutLabel('Z')).toBe('Ctrl+Z')
+    expect(redoShortcutLabel()).toBe('Ctrl+Y')
   })
 })
 

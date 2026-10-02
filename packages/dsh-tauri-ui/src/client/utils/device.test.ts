@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { detectMobileDevice, isMobileDevice } from './settings.utils'
+import { detectMobileDevice, isMobileDevice } from './device'
 
 const MOBILE_QUERIES = ['(hover: none)', '(any-pointer: coarse)', '(any-hover: none)']
 

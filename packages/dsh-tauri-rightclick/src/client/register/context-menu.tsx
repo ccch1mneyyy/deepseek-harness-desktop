@@ -3,7 +3,7 @@ import type { ClientContext } from 'dsh-tauri/client'
 import type { ReactNode } from 'react'
 import type { ActionOutcome, SessionsRuntimeLike, WorkspacesRuntimeLike } from '../types'
 import type { MenuComposer, OfficialSelectOptions } from './context-menu.types'
-import { Menu, Toast } from 'dsh-tauri-ui/client'
+import { detectMobileDevice, Menu, Toast } from 'dsh-tauri-ui/client'
 import { defineRegister } from 'dsh-tauri/client'
 import { createRoot } from 'react-dom/client'
 import { CONTEXT_MENU_EVENT, LINK_SELECTOR, TOAST_DURATION_MS } from '../constants'
@@ -165,6 +165,10 @@ export const contextMenuFeature = defineRegister<ClientContext>((controller, _ct
     const sessionWorkspace = resolvedWorkspace ? { workspace: resolvedWorkspace } : null
     const workspaceTarget = !row && !ungroupedRow ? workspaceFrom(event.target, workspaces) : null
     const editable = editableFrom(event.target)
+    if (editable && detectMobileDevice()) {
+      close()
+      return
+    }
     const selection = selectedText(editable).trim()
     const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>(LINK_SELECTOR) : null
     const surface = selectionSurface(event.target)

@@ -12,8 +12,8 @@ import { registerSettingsObstructions } from './register/obstructions'
 import { registerSettingsSections } from './register/sections'
 import { registerSettings } from './register/settings'
 import { registerSettingsOpen } from './register/settings-open'
-import { detectMobileDevice } from './register/settings.utils'
 import { registerStyles } from './register/styles'
+import { detectMobileDevice } from './utils/device'
 
 export * from './components'
 export * from './components/panel'
@@ -26,6 +26,7 @@ export * from './types/remotes'
 export type * from './types/sections'
 export type * from './types/selector'
 export * from './utils/cssr'
+export { detectMobileDevice } from './utils/device'
 export * from './utils/style'
 
 export const name = PLUGIN_ID

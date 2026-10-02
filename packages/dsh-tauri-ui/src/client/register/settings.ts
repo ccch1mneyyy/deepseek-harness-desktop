@@ -12,7 +12,7 @@ import {
 import { store } from '../store'
 import { SettingsSidebar } from '../ui/settings-sidebar'
 import { SettingsTrigger } from '../ui/settings-trigger'
-import { detectMobileDevice } from './settings.utils'
+import { detectMobileDevice } from '../utils/device'
 
 const SETTINGS_SHORTCUT_EFFECT = 'dsh-tauri-ui: settings launcher shortcut (Ctrl+, hint)'
 
