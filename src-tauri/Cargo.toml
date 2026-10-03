@@ -175,6 +175,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_Time",
+  # GetAsyncKeyState / VK_LBUTTON：原生拖拽期间上报左键松开（desktop/pet_mouse.rs）
+  "Win32_UI_Input_KeyboardAndMouse",
   # ExtractIconExW：任务栏大图标从 exe 内嵌图标资源提取（desktop/builder.rs，issue #744）
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",

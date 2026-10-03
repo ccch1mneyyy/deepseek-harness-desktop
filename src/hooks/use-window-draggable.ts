@@ -1,9 +1,19 @@
 import { useEventListener, useTimeoutFn } from '@reause/core'
+import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useRef, useState } from 'react'
+import { useListen } from '@/hooks/use-listen'
 
 /** 拖拽的水平方向。 */
 type DragDirection = 'left' | 'right'
+
+/**
+ * `device-mouse-button` 事件载荷：全局鼠标左键是否按下。
+ * 与后端 `src-tauri/src/desktop/pet_mouse.rs` 的 `MouseButtonState` 一一对应。
+ */
+interface MouseButtonState {
+  pressed: boolean
+}
 
 export interface UseWindowDraggableResult {
   /** 原生拖拽会话进行中（按下后位移超过阈值才算，结束/超时后为 false）。 */
@@ -50,6 +60,14 @@ const DRAG_SESSION_TIMEOUT = 1500
  * 返回，Promise 瞬间 resolve —— 它不代表拖拽结束，不能在 await 后清理拖拽态；
  * 因此「拖拽进行中」= 按下后 Moved 事件持续到来，由两级停歇判断收尾（见上方两个
  * 超时常量），pointerup / pointercancel 仅作兜底。
+ *
+ * # 松开时刻来自后端设备流
+ *
+ * 原生拖拽跑在系统模态循环里、按钮事件被它吞掉：webview 在整个拖拽期间（含松手
+ * 瞬间）都收不到 pointerup / pointercancel，只靠 Moved 停歇兜底会让拖拽动画在松手
+ * 后多挂 `DRAG_SESSION_TIMEOUT`（1.5s），比网页版（指针事件即时生效）慢半拍。
+ * 后端全局鼠标流用 `device-mouse-button` 上报 OS 侧看到的左键状态，松开即收尾，
+ * 停歇阈值退化为纯粹的「事件流失联」兜底（也覆盖拖拽时鼠标静止不动的停顿）。
  */
 export function useWindowDraggable(): UseWindowDraggableResult {
   const activeRef = useRef(false)
@@ -110,6 +128,18 @@ export function useWindowDraggable(): UseWindowDraggableResult {
   useEventListener('pointerdown', handlePointerDown)
   useEventListener('pointerup', handlePointerUp)
   useEventListener('pointercancel', handlePointerUp)
+
+  // 只认松开：拖拽会话由 handlePointerDown 开启，后端设备流补的是 OS 侧的结束时刻。
+  useListen<MouseButtonState>('device-mouse-button', ({ payload }) => {
+    if (!payload.pressed)
+      endDrag()
+  })
+
+  // keep:effect 拉起后端鼠标设备流（左键状态是拖拽结束的唯一可靠信号）；命令幂等，
+  // 渲染期调用会在每次重渲染重复发起 IPC。
+  useEffect(() => {
+    void invoke('start_pet_mouse_stream').catch(() => {})
+  }, [])
 
   useEffect(() => {
     let disposed = false
