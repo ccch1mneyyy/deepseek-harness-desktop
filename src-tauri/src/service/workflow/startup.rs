@@ -5,7 +5,6 @@ use crate::config;
 
 static SPAWN_AT_MS: AtomicU64 = AtomicU64::new(0);
 static HTTP_AT_MS: AtomicU64 = AtomicU64::new(0);
-static HTTP_RECORDED: AtomicBool = AtomicBool::new(false);
 static READY_RECORDED: AtomicBool = AtomicBool::new(false);
 
 fn now_ms() -> u64 {
@@ -22,7 +21,6 @@ fn elapsed_since_spawn_ms() -> Option<u64> {
 pub(super) fn note_spawn() {
     SPAWN_AT_MS.store(now_ms(), Ordering::SeqCst);
     HTTP_AT_MS.store(0, Ordering::SeqCst);
-    HTTP_RECORDED.store(false, Ordering::SeqCst);
     READY_RECORDED.store(false, Ordering::SeqCst);
 }
 
@@ -30,10 +28,12 @@ pub(super) fn note_http_answer() {
     let Some(elapsed_ms) = elapsed_since_spawn_ms() else {
         return;
     };
-    if HTTP_RECORDED.swap(true, Ordering::SeqCst) {
+    if HTTP_AT_MS
+        .compare_exchange(0, now_ms(), Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         return;
     }
-    HTTP_AT_MS.store(now_ms(), Ordering::SeqCst);
     log::info!(
         "STARTUP_HTTP: Harness answered the boot probe, spawn_to_first_response_ms={elapsed_ms}"
     );
