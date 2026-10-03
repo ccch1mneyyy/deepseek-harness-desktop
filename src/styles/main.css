@@ -51,7 +51,7 @@
   .menu-item,
   .list-box-item {
     border-radius: var(--radius-md);
-    min-height: calc(var(--spacing) * 9);
+    min-height: calc(var(--spacing) * 3);
   }
   .menu-item .label {
     font-size: 13px;
