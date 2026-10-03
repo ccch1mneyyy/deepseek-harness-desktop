@@ -132,7 +132,6 @@ mod tests {
             "{error}"
         );
         assert!(error.contains("connect=true"), "{error}");
-        assert!(error.contains("timeout=false"), "{error}");
         assert!(!error.contains("elapsed_ms="), "{error}");
         assert!(error.contains("source:"), "{error}");
         assert!(
@@ -140,6 +139,23 @@ mod tests {
             "{error}"
         );
         assert_eq!(client_probe_endpoints(port).await.unwrap_err(), error);
+    }
+
+    #[tokio::test]
+    async fn boot_probe_gives_up_on_closed_port_without_os_connect_timeout() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let started = std::time::Instant::now();
+        let error = client_probe_endpoints(port).await.unwrap_err();
+        let elapsed = started.elapsed();
+
+        assert!(error.contains("connect=true"), "{error}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(1),
+            "closed-port probe waited {elapsed:?}"
+        );
     }
 
     #[tokio::test]

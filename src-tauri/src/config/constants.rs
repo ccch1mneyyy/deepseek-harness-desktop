@@ -124,6 +124,14 @@ pub const STORE_PENDING_INSTALLER_KEY: &str = "desktop_pending_installer";
 /// 健康检查超时
 pub const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// 回环探测的建连超时。
+///
+/// 装了 TUN 式网络过滤器（Clash/Mihomo TUN、Fake-IP 等）的机器上，**失败**的回环
+/// `connect` 会固定阻塞约 2s（实测 2014–2067ms，`curl`/`.NET`/裸 winsock 一致），
+/// 而 `HEALTH_CHECK_TIMEOUT` 只覆盖响应读取。端口尚未监听的每一轮健康检查因此都要
+/// 白等 2s；回环建连本身在微秒级完成，只对建连单独限时即可把这段等待压到百毫秒级。
+pub const LOOPBACK_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
+
 #[cfg(test)]
 mod tests {
     use super::get_dsh_service_url;

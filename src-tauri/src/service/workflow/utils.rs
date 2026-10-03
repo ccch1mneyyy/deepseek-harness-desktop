@@ -19,9 +19,14 @@ fn dsh_log_lock() -> &'static Mutex<()> {
 /// 生命周期探测访问的是本机 dsh，不能继承 `HTTP_PROXY` / `ALL_PROXY`：部分代理
 /// 不尊重回环地址直连，或应用进程没有 `NO_PROXY`，会把健康检查转发到外部代理，
 /// 造成端口已经监听但持续误报未就绪。
+///
+/// 建连单独限时（[`crate::config::LOOPBACK_CONNECT_TIMEOUT`]）：TUN 式网络过滤器
+/// 会把**失败**的回环 `connect` 拖到约 2s，而 `timeout` 只覆盖响应，端口尚未监听的
+/// 每一轮探测都会因此白等 2s。
 pub(super) fn loopback_http_client(timeout: Duration) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .no_proxy()
+        .connect_timeout(crate::config::LOOPBACK_CONNECT_TIMEOUT)
         .timeout(timeout)
         .build()
 }
