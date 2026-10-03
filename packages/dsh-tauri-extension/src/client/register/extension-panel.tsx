@@ -12,7 +12,7 @@ import { chooseWorkspace, sessionSnapshotOf, workspaceSnapshotOf } from './exten
 
 const pluginsStyle = cssr.c([
   cssr.c('[data-dsh-extension-plugins]', { position: 'relative' }),
-  cssr.c('[data-dsh-extension-plugins] > [data-dsh-plugins-icon]', { display: 'none', position: 'absolute', top: '1px', left: 0, width: '22px', height: '22px', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }),
+  cssr.c('[data-dsh-extension-plugins] > [data-dsh-plugins-icon]', { display: 'none', position: 'absolute', top: '5px', left: 0, width: '22px', height: '22px', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }),
   cssr.c('[data-dsh-extension-plugins]:has([data-plugin-panel] > header[data-window-drag]) > [data-dsh-plugins-icon]', { display: 'inline-flex' }),
   cssr.c('[data-dsh-extension-plugins] [data-plugin-panel]', { height: 'auto', padding: 0, overflow: 'visible', gap: '14px' }),
   cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header[data-window-drag]', { paddingTop: 0, flexWrap: 'wrap', alignItems: 'center', gap: '14px 10px' }),
