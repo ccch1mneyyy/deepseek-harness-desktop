@@ -9,6 +9,7 @@ import { Hint } from '@/ui/pet/hint'
 import { useWakelockRelease } from '../hooks/use-wakelock-release'
 import { PET_BASE_WIDTH, PET_DSH_ASPECT } from './constants'
 import { useBubbleTracker } from './hooks/use-bubble-tracker'
+import { usePetPhysics } from './hooks/use-pet-physics'
 import { usePetSource } from './hooks/use-pet-source'
 import { normalizeSizePercent, usePetStatus } from './hooks/use-pet-status'
 import { usePetWindowSize } from './hooks/use-pet-window'
@@ -42,6 +43,8 @@ export function App() {
   const width = (source?.width ?? PET_BASE_WIDTH) * normalizeSizePercent(status?.pet_size) / 100
 
   useBubbleTracker(pet, source)
+  // 甩动：松手后按窗口轨迹估速请求组件甩出，飞行积分与落地 Q 弹都在宿主（见 hook 文档）。
+  const onFling = usePetPhysics(pet, source?.kind)
   usePetWindowSize(width, source?.aspect ?? PET_DSH_ASPECT, visible)
   useOmitIgnoreCursorEvents(hitboxRef)
   useEventListener('contextmenu', event => event.preventDefault())
@@ -67,6 +70,7 @@ export function App() {
           motion={source?.kind === 'codex' ? motion : undefined}
           size={width}
           dragging={draggable.dragging}
+          onFling={onFling}
           cache={true}
           hidden={!visible}
           hitboxRef={hitboxRef}
