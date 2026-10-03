@@ -656,6 +656,9 @@ importers:
       dsh-tauri-extension:
         specifier: workspace:*
         version: link:../dsh-tauri-extension
+      dsh-tauri-mobile-ui:
+        specifier: workspace:*
+        version: link:../dsh-tauri-mobile-ui
       dsh-tauri-model:
         specifier: workspace:*
         version: link:../dsh-tauri-model
@@ -751,6 +754,25 @@ importers:
       smol-toml:
         specifier: catalog:utils
         version: 1.8.0
+      tsdown:
+        specifier: catalog:cli
+        version: 0.17.4(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)(oxc-resolver@11.24.2)(publint@0.3.24)(synckit@0.11.13)(typescript@5.8.3)
+
+  packages/dsh-tauri-mobile-ui:
+    dependencies:
+      dsh-tauri:
+        specifier: workspace:*
+        version: link:../dsh-tauri
+      dsh-tauri-ui:
+        specifier: workspace:*
+        version: link:../dsh-tauri-ui
+    devDependencies:
+      dsh-tauri-tsdown:
+        specifier: workspace:*
+        version: link:../dsh-tauri-tsdown
+      react:
+        specifier: catalog:runtime
+        version: 19.2.8
       tsdown:
         specifier: catalog:cli
         version: 0.17.4(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)(oxc-resolver@11.24.2)(publint@0.3.24)(synckit@0.11.13)(typescript@5.8.3)
