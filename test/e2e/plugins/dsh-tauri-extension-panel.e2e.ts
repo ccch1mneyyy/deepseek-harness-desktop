@@ -62,7 +62,7 @@ describe('extension panel official plugins composition', () => {
       await tabs.getByRole('tab', { name: '技能', exact: true }).click()
       const skillsPanel = app.frame.getByRole('tabpanel', { name: '技能', exact: true, includeHidden: true })
       await expect.poll(() => skillsPanel.isVisible()).toBe(true)
-      expect(await skillsPanel.locator('h3').evaluate((el) => {
+      expect(await skillsPanel.locator(':scope > div > div:first-child > h3').evaluate((el) => {
         const style = getComputedStyle(el)
         return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }
       }), '插件标题尺寸必须与技能页一致').toEqual(titleStyle)
