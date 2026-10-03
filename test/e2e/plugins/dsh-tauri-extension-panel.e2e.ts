@@ -19,8 +19,8 @@ describe('extension panel official plugins composition', () => {
       expect(await originalRow.evaluate(el => getComputedStyle(el).display)).toBe('none')
       expect(await originalRow.isVisible()).toBe(false)
 
-      await app.frame.getByRole('button', { name: '扩展管理', exact: true }).click()
-      const tabs = app.frame.getByRole('tablist', { name: '扩展管理' })
+      await app.frame.getByRole('button', { name: '插件扩展', exact: true }).click()
+      const tabs = app.frame.getByRole('tablist', { name: '插件扩展' })
       const pluginsTab = tabs.getByRole('tab', { name: '插件', exact: true })
       await expect.poll(() => tabs.getByRole('tab').first().textContent()).toBe('插件')
       await expect.poll(() => pluginsTab.getAttribute('aria-selected')).toBe('true')
@@ -34,9 +34,42 @@ describe('extension panel official plugins composition', () => {
       })).toEqual({ padding: '0px', overflow: 'visible' })
       expect(await officialPage.locator(':scope > header[data-window-drag]').evaluate(el => getComputedStyle(el).paddingTop)).toBe('0px')
 
+      const heading = officialPage.locator(':scope > header h1')
+      const intro = officialPage.locator(':scope > header > div:first-child > div')
+      const titleStyle = await heading.evaluate((el) => {
+        const style = getComputedStyle(el)
+        return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }
+      })
+      const introStyle = await intro.evaluate((el) => {
+        const style = getComputedStyle(el)
+        return { fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color }
+      })
+      expect(titleStyle).toEqual({ fontSize: '16px', lineHeight: '24px', fontWeight: '500' })
+      expect(introStyle).toMatchObject({ fontSize: '12px', lineHeight: '18px' })
+      expect(await officialPage.locator(':scope > header').evaluate(el => getComputedStyle(el).rowGap)).toBe('14px')
+      const sparkle = app.frame.locator('[data-dsh-plugins-icon] svg')
+      expect(await sparkle.isVisible(), '官方闪光图标必须出现在页头').toBe(true)
+      expect(await sparkle.getAttribute('width')).toBe('16')
+
+      await expect.poll(() => officialPage.locator('[data-plugin-item]').count()).toBeGreaterThan(0)
+      await officialPage.locator('[data-plugin-item]').first().getByRole('button').first().click()
+      const detailTop = officialPage.locator(':scope > div[data-window-drag]')
+      await expect.poll(() => detailTop.isVisible()).toBe(true)
+      expect(await detailTop.evaluate(el => getComputedStyle(el).paddingTop), '详情顶部间距必须为 12px').toBe('12px')
+      expect(await sparkle.isVisible(), '详情页不显示列表页头图标').toBe(false)
+      await detailTop.getByRole('button').first().click()
+
       await tabs.getByRole('tab', { name: '技能', exact: true }).click()
       const skillsPanel = app.frame.getByRole('tabpanel', { name: '技能', exact: true, includeHidden: true })
       await expect.poll(() => skillsPanel.isVisible()).toBe(true)
+      expect(await skillsPanel.locator('h3').evaluate((el) => {
+        const style = getComputedStyle(el)
+        return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }
+      }), '插件标题尺寸必须与技能页一致').toEqual(titleStyle)
+      expect(await skillsPanel.locator(':scope > div > p').first().evaluate((el) => {
+        const style = getComputedStyle(el)
+        return { fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color }
+      }), '插件描述尺寸和颜色必须与技能页一致').toEqual(introStyle)
       await expect.poll(() => app.frame.locator('[data-plugin-panel]').count(), { message: '离开插件 Tab 必须卸载官方页面，不能仅 hidden' }).toBe(0)
 
       await tabs.getByRole('tab', { name: 'MCP', exact: true }).click()

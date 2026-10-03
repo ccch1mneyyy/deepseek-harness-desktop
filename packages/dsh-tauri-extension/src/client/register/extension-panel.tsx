@@ -1,6 +1,6 @@
 import type { ClientContext, PanelHandle, SlotRegistry } from 'dsh-tauri/client'
 import type { ReactElement } from 'react'
-import { cssr, Icon, mountStyle, Panel, Puzzle, SlotOutlet } from 'dsh-tauri-ui/client'
+import { cssr, Icon, IconSparkleRegular, mountStyle, Panel, Puzzle, SlotOutlet } from 'dsh-tauri-ui/client'
 import { definePanel, defineRegister, hidePanel } from 'dsh-tauri/client'
 import { useSyncExternalStore } from 'react'
 import { ExtensionPanel } from '../components/extension-panel'
@@ -11,8 +11,16 @@ import { store } from '../store'
 import { chooseWorkspace, sessionSnapshotOf, workspaceSnapshotOf } from './extension-panel.utils'
 
 const pluginsStyle = cssr.c([
-  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel]', { height: 'auto', padding: 0, overflow: 'visible' }),
-  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header[data-window-drag]', { paddingTop: 0 }),
+  cssr.c('[data-dsh-extension-plugins]', { position: 'relative' }),
+  cssr.c('[data-dsh-extension-plugins] > [data-dsh-plugins-icon]', { display: 'none', position: 'absolute', top: '1px', left: 0, width: '22px', height: '22px', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }),
+  cssr.c('[data-dsh-extension-plugins]:has([data-plugin-panel] > header[data-window-drag]) > [data-dsh-plugins-icon]', { display: 'inline-flex' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel]', { height: 'auto', padding: 0, overflow: 'visible', gap: '14px' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header[data-window-drag]', { paddingTop: 0, flexWrap: 'wrap', alignItems: 'center', gap: '14px 10px' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header > div:first-child', { display: 'contents' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header h1', { margin: 0, paddingLeft: '32px', fontSize: '16px', lineHeight: '24px', fontWeight: 500 }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header > div:first-child > div', { order: 2, width: '100%', margin: 0, fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header > div:last-child', { marginLeft: 'auto' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > div[data-window-drag]', { paddingTop: '12px' }),
 ])
 
 export const extensionPanelFeature = defineRegister<ClientContext>((controller, ctx, adapter) => {
@@ -85,8 +93,14 @@ export const extensionPanelFeature = defineRegister<ClientContext>((controller, 
     render: function ExtensionPage() {
       const available = useSyncExternalStore(subscribePlugins, hasPlugins, hasPlugins)
       let plugins: ReactElement | undefined
-      if (available && typeof SlotOutlet === 'function')
-        plugins = <div data-dsh-extension-plugins><SlotOutlet slotKey="main" opts={{ entryKey: 'plugins' }} /></div>
+      if (available && typeof SlotOutlet === 'function') {
+        plugins = (
+          <div data-dsh-extension-plugins>
+            <span data-dsh-plugins-icon aria-hidden="true"><IconSparkleRegular size={16} /></span>
+            <SlotOutlet slotKey="main" opts={{ entryKey: 'plugins' }} />
+          </div>
+        )
+      }
       return (
         <Panel>
           <ExtensionPanel plugins={plugins} createSkill={createSkill} market={embedMarket ? readMarket(ctx) : undefined} />

@@ -19,6 +19,7 @@ export {
   FISH_LOGO_VIEWBOX,
   FishLogo,
   HoverCard,
+  IconSparkleRegular,
   Input,
   JsonBlock,
   JsonTree,
