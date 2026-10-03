@@ -20,6 +20,11 @@ export default defineProject({
     include: ['test/e2e/plugins/**/*.e2e.ts'],
     globalSetup: ['./test/e2e/setup-plugin.ts'],
     environment: 'node',
+    server: {
+      deps: {
+        inline: [/\/dsh-tauri-mobile-ui\/src\/client\/styles\//],
+      },
+    },
     fileParallelism: false,
     testTimeout: 120_000,
     hookTimeout: 120_000,
