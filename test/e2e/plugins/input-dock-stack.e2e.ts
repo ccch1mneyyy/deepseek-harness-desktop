@@ -4,8 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import mobileStyle from '../../../packages/dsh-tauri-mobile-ui/src/client/styles/mobile.cssr'
 import globalStyle from '../../../packages/dsh-tauri-ui/src/client/styles/global.cssr'
 
-vi.mock('dsh-tauri/client', () => import('../../../packages/dsh-tauri/src/client/utils/device'))
-vi.mock('dsh-tauri-ui/client', () => import('../../../packages/dsh-tauri-ui/src/client/utils/cssr'))
+vi.mock('../../../packages/dsh-tauri/dist/client.cjs', () => import('../../../packages/dsh-tauri/src/client/utils/device'))
+vi.mock('../../../packages/dsh-tauri-ui/dist/client.cjs', () => import('../../../packages/dsh-tauri-ui/src/client/utils/cssr'))
 
 let browser: Browser
 let page: Page
