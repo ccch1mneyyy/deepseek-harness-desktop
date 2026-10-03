@@ -53,7 +53,7 @@ describe('extension panel official plugins composition', () => {
 
       await expect.poll(() => officialPage.locator('[data-plugin-item]').count()).toBeGreaterThan(0)
       await officialPage.locator('[data-plugin-item]').first().getByRole('button').first().click()
-      const detailTop = officialPage.locator(':scope > div[data-window-drag]')
+      const detailTop = officialPage.locator('[data-plugin-item-detail] > div[data-window-drag]')
       await expect.poll(() => detailTop.isVisible()).toBe(true)
       expect(await detailTop.evaluate(el => getComputedStyle(el).paddingTop), '详情顶部间距必须为 12px').toBe('12px')
       expect(await sparkle.isVisible(), '详情页不显示列表页头图标').toBe(false)

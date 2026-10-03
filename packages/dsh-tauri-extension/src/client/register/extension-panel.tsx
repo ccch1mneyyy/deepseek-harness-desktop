@@ -20,7 +20,7 @@ const pluginsStyle = cssr.c([
   cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header h1', { margin: 0, paddingLeft: '32px', fontSize: '16px', lineHeight: '24px', fontWeight: 500 }),
   cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header > div:first-child > div', { order: 2, width: '100%', margin: 0, fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' }),
   cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > header > div:last-child', { marginLeft: 'auto' }),
-  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] > div[data-window-drag]', { paddingTop: '12px' }),
+  cssr.c('[data-dsh-extension-plugins] [data-plugin-panel] div[data-window-drag]', { paddingTop: '12px' }),
 ])
 
 export const extensionPanelFeature = defineRegister<ClientContext>((controller, ctx, adapter) => {
