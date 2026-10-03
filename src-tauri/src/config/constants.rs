@@ -132,6 +132,9 @@ pub const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 /// 白等 2s；回环建连本身在微秒级完成，只对建连单独限时即可把这段等待压到百毫秒级。
 pub const LOOPBACK_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
+/// spawn → 客户端模块就绪超过该阈值时，日志给出 `STARTUP_SLOW` 归因（正常机器实测 5–8s）。
+pub const SLOW_STARTUP_THRESHOLD: Duration = Duration::from_secs(15);
+
 #[cfg(test)]
 mod tests {
     use super::get_dsh_service_url;

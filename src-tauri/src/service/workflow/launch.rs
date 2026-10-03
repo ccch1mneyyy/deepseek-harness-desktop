@@ -654,6 +654,7 @@ pub async fn launch(app_handle: tauri::AppHandle) -> Result<(), String> {
             .unwrap_or(app_core_dir)
     };
     mark_phase("pre_spawn_setup", &mut phase_started);
+    super::startup::note_spawn();
     let spawn_result: SpawnResult = {
         #[cfg(windows)]
         {
