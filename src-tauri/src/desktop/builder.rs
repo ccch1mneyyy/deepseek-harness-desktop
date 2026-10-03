@@ -1,4 +1,4 @@
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(windows)]
@@ -32,6 +32,12 @@ use tauri::menu::{PredefinedMenuItem, Submenu};
 
 #[cfg(target_os = "macos")]
 static MACOS_FULLSCREEN_MENU_ITEM: OnceLock<Mutex<Option<MenuItem<Wry>>>> = OnceLock::new();
+
+// MainEventsCleared 每轮都触发，但只有窗口布局变化后红绿灯才可能被 AppKit 重置。
+// 无脑每轮校准会克隆窗口句柄，而该克隆会 CFRunLoopWakeUp 主 RunLoop，令
+// MainEventsCleared 立刻再次触发，把主线程烧成 100% CPU（issue #880）。
+#[cfg(target_os = "macos")]
+static MACOS_TITLEBAR_SYNC_PENDING: AtomicBool = AtomicBool::new(true);
 
 #[cfg(target_os = "macos")]
 const MACOS_VIEW_COMMANDS: [(&str, &str); 4] = [
@@ -868,7 +874,23 @@ fn with_shell_chrome<'a>(
 }
 
 #[cfg(target_os = "macos")]
+pub(crate) fn on_macos_titlebar_event(event: &tauri::WindowEvent) {
+    if matches!(
+        event,
+        tauri::WindowEvent::Resized(_)
+            | tauri::WindowEvent::ScaleFactorChanged { .. }
+            | tauri::WindowEvent::ThemeChanged(_)
+            | tauri::WindowEvent::Focused(_)
+    ) {
+        MACOS_TITLEBAR_SYNC_PENDING.store(true, Ordering::Relaxed);
+    }
+}
+
+#[cfg(target_os = "macos")]
 pub(crate) fn sync_macos_titlebars(app: &tauri::AppHandle<Wry>) {
+    if !MACOS_TITLEBAR_SYNC_PENDING.swap(false, Ordering::Relaxed) {
+        return;
+    }
     for webview in app.webview_windows().into_values() {
         let Ok(handle) = webview.ns_window() else {
             continue;
@@ -893,6 +915,42 @@ pub(crate) fn sync_macos_titlebars(app: &tauri::AppHandle<Wry>) {
             if let Some(content) = window.contentView() {
                 content.display();
             }
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_titlebar_tests {
+    use super::{on_macos_titlebar_event, MACOS_TITLEBAR_SYNC_PENDING};
+    use std::sync::atomic::Ordering;
+    use tauri::{PhysicalPosition, PhysicalSize, Theme, WindowEvent};
+
+    #[test]
+    fn only_layout_events_arm_the_titlebar_sync() {
+        for event in [
+            WindowEvent::Moved(PhysicalPosition::new(10, 10)),
+            WindowEvent::Destroyed,
+        ] {
+            MACOS_TITLEBAR_SYNC_PENDING.store(false, Ordering::Relaxed);
+            on_macos_titlebar_event(&event);
+            assert!(
+                !MACOS_TITLEBAR_SYNC_PENDING.load(Ordering::Relaxed),
+                "{event:?} 不该触发校准：拖动窗口时 Moved 会持续高频触发，\
+                 逐帧校准会克隆窗口句柄并唤醒主 RunLoop，把主线程烧满（issue #880）"
+            );
+        }
+
+        for event in [
+            WindowEvent::Resized(PhysicalSize::new(800, 600)),
+            WindowEvent::ThemeChanged(Theme::Dark),
+            WindowEvent::Focused(true),
+        ] {
+            MACOS_TITLEBAR_SYNC_PENDING.store(false, Ordering::Relaxed);
+            on_macos_titlebar_event(&event);
+            assert!(
+                MACOS_TITLEBAR_SYNC_PENDING.load(Ordering::Relaxed),
+                "{event:?} 会改变标题栏布局，必须触发一次校准"
+            );
         }
     }
 }
