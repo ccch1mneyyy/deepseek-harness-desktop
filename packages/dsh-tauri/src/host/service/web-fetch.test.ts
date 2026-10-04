@@ -1,19 +1,16 @@
-import type { WebFetchProviderService, WebFetchResult } from '../types'
-import type { AddressLookup, DnsLookupAddress, HttpFetchResolver } from './web-fetch'
-import { describe, expect, it, vi } from 'vitest'
-import {
+import type { HostPluginLoader, WebFetchProviderService, WebFetchResult, WebRuntimeService } from '../types'
+import type { AddressLookup, DnsLookupAddress, HttpFetchResolver } from './web-fetch.types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { clearHostRuntime, setCurrentHostInstance } from '../config/runtime'
+import { webFetch } from './web-fetch'
+import { createFakeIpResolver, createStrictPublicResolver, isFakeIp, isPublicAddress, parseFakeIpCidrs } from './web-fetch.utils'
 
-  createFakeIpResolver,
-  createStrictPublicResolver,
-  DEFAULT_FAKE_IP_CIDRS,
+afterEach(() => {
+  clearHostRuntime()
+})
 
-  FAKE_IP_FETCH_PROVIDER_ID,
-
-  isFakeIp,
-  isPublicAddress,
-  parseFakeIpCidrs,
-  registerFakeIpFetchProvider,
-} from './web-fetch'
+const FAKE_IP_FETCH_PROVIDER_ID = 'http'
+const DEFAULT_FAKE_IP_CIDRS = ['198.18.0.0/15'] as const
 
 class TestWebError extends Error {
   readonly code: string
@@ -166,21 +163,22 @@ describe('fake-IP resolver policy', () => {
 
 describe('fake-IP provider registration', () => {
   it('registers an unavailable provider when the runtime web module fails to load', async () => {
-    const loader = {
+    const loader: HostPluginLoader = {
       import: vi.fn(async () => {
         throw new Error('runtime module unavailable')
       }),
       unwrapExports: vi.fn((value: unknown) => value),
     }
     const registered: { provider?: WebFetchProviderService } = {}
-    const web = {
+    const web: WebRuntimeService = {
       registerFetchProvider: vi.fn((provider: WebFetchProviderService) => {
         registered.provider = provider
         return vi.fn()
       }),
     }
+    setCurrentHostInstance({ connection: {} as never, web, loader } as never)
 
-    await registerFakeIpFetchProvider(web, loader)
+    await webFetch.attach()
 
     expect(registered.provider?.id).toBe(FAKE_IP_FETCH_PROVIDER_ID)
     expect(registered.provider?.available()).toBe(false)
@@ -188,21 +186,22 @@ describe('fake-IP provider registration', () => {
   })
 
   it('registers an unavailable provider when the runtime HTTP module is invalid', async () => {
-    const loader = {
+    const loader: HostPluginLoader = {
       import: vi.fn(async (name: string) => name === '@deepseek-ai/dsh-web'
         ? { WebError: TestWebError }
         : { HttpFetchProvider: class {} }),
       unwrapExports: vi.fn((value: unknown) => value),
     }
     const registered: { provider?: WebFetchProviderService } = {}
-    const web = {
+    const web: WebRuntimeService = {
       registerFetchProvider: vi.fn((provider: WebFetchProviderService) => {
         registered.provider = provider
         return vi.fn()
       }),
     }
+    setCurrentHostInstance({ connection: {} as never, web, loader } as never)
 
-    await registerFakeIpFetchProvider(web, loader)
+    await webFetch.attach()
 
     expect(registered.provider?.id).toBe(FAKE_IP_FETCH_PROVIDER_ID)
     expect(registered.provider?.available()).toBe(false)
@@ -237,18 +236,19 @@ describe('fake-IP provider registration', () => {
       HttpFetchProvider: FakeHttpFetchProvider,
     }
     const webModule = { WebError: class extends Error {} }
-    const loader = {
+    const loader: HostPluginLoader = {
       import: vi.fn(async (name: string) => name === '@deepseek-ai/dsh-web' ? webModule : httpModule),
       unwrapExports: vi.fn((value: unknown) => value),
     }
-    const web = {
+    const web: WebRuntimeService = {
       registerFetchProvider: vi.fn((provider: WebFetchProviderService) => {
         registered.provider = provider
         return dispose
       }),
     }
+    setCurrentHostInstance({ connection: {} as never, web, loader } as never)
 
-    const unregister = await registerFakeIpFetchProvider(web, loader, DEFAULT_FAKE_IP_CIDRS)
+    const unregister = await webFetch.attach(DEFAULT_FAKE_IP_CIDRS)
 
     expect(loader.import).toHaveBeenNthCalledWith(1, '@deepseek-ai/dsh-web')
     expect(loader.import).toHaveBeenNthCalledWith(2, '@deepseek-ai/dsh-web-fetch-http')

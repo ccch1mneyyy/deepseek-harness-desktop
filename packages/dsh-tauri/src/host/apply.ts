@@ -3,7 +3,7 @@ import process from 'node:process'
 import { PLUGIN_ID } from '../shared/constants'
 import { clearHostRuntime, setCurrentHostInstance } from './config/runtime'
 import { gate } from './service/gate'
-import { registerFakeIpFetchProvider } from './service/web-fetch'
+import { webFetch } from './service/web-fetch'
 
 const GATE_EFFECT = `${PLUGIN_ID}: gate`
 const ACCOUNT_EFFECT = `${PLUGIN_ID}: account desktop marker`
@@ -32,7 +32,7 @@ export function apply(ctx: HostContext): void {
   setCurrentHostInstance(ctx as unknown as ConnectionHost)
 
   ctx.effect(() => gate.attach(), GATE_EFFECT)
-  ctx.effect(() => registerFakeIpFetchProvider(ctx.web, ctx.loader), WEB_FETCH_EFFECT)
+  ctx.effect(() => webFetch.attach(), WEB_FETCH_EFFECT)
   if (process.env.DSH_TAURI_EMBEDDED === '1') {
     ctx.effect(() => ctx.on('webserver/index-inject', (table) => {
       table.push({ kind: 'script', placement: 'head', text: ACCOUNT_MARKER_SCRIPT })
