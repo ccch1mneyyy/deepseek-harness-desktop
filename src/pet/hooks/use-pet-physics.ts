@@ -16,9 +16,15 @@ const TRAIL_LIMIT = 64
  * 组件 0.2.3 起把甩动物理留给宿主（见组件 `docs/spec/pet-interactions.md` 的职责划分），
  * 桌宠宿主的舞台就是显示器工作区、宠物本体就是窗口，于是飞行 = 每帧 `setPosition`：
  *
- * - **轨迹来自窗口 `Moved`**：原生拖拽跑在系统模态循环里，webview 收不到 pointermove，
- *   窗口位移是唯一能看出「甩得多快」的信号；`device-mouse-button` 给的是 OS 侧的松开
- *   时刻（见 `use-window-draggable.ts`），两者拼出一次甩动；
+ * - **轨迹来自窗口 `Moved`**：拖拽由 `use-window-draggable.ts` 的弹簧每帧 `setPosition`
+ *   驱动，命中箱的 `pointermove` 是相对窗口的坐标、会自我反馈，因此窗口位移仍是能看出
+ *   「甩得多快」的信号；松开时刻有两条路 —— 命中箱 `pointerup`（更早、更可靠）与
+ *   `device-mouse-button`（OS 侧兜底），两条都汇到 `onRelease` 且只结算一次
+ *   （见 `use-window-draggable.ts`），与窗口位移一起拼出一次甩动；
+ * - **抓取只认命中箱**：`device-mouse-button` 是**全屏**左键流，在桌面别处的点击同样会
+ *   上报「按下」；拿它当抓取会让甩出中的宠物被无关点击刹车。真正的抓取信号是命中箱上的
+ *   `pointerdown`（`useWindowDraggable({ onGrab })` → `onGrab`），它同时给这次甩动开
+ *   轨迹；
  * - **增益只在 `onFling` 里施加**：松手时先用 `throwPower = 1` 判断「这一下要不要甩」，
  *   组件回吐的 `PetPhysicsEvent` 才带着合并后的 `physics`（prop > 配置 > 默认），速度的
  *   `throwPower` 放大因此只能在那里做 —— 默认值 1 时与组件参考实现完全等价；
@@ -26,8 +32,9 @@ const TRAIL_LIMIT = 64
  *   `devicePixelRatio` 换成物理像素；Retina 上不去换算，观感速度会差一倍；
  * - 单宠物窗口没有宠物间碰撞，`physics.petCollision` 与 `pet.bounce` 不适用。
  */
-export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): (event: PetPhysicsEvent) => void {
+export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): PetPhysicsControls {
   const trailRef = useRef<DragSample[]>([])
+  /** 是否抓住了宠物（信号来自命中箱 `pointerdown`，见 `onGrab`）：轨迹只在抓取后采样。 */
   const pressedRef = useRef(false)
   const flightRef = useRef<Flight | null>(null)
   // 飞行代号：起飞行要 await 显示器与窗口位置，期间可能被「抓取取消」或下一次甩动顶掉。
@@ -63,7 +70,7 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): (
   rafRef.current = raf
 
   useEffect(() => {
-    // keep:effect 原生拖拽期间 webview 收不到 pointermove，只能靠窗口 Moved 采轨迹
+    // keep:effect 拖拽的每帧 setPosition 同样触发 Moved，甩动轨迹以窗口位移为准
     let disposed = false
     let unlisten: (() => void) | undefined
 
@@ -91,24 +98,13 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): (
     }
   }, [])
 
+  // 只认松开：`device-mouse-button` 是全屏左键流，别处的点击也会上报按下，
+  // 因此「抓取」不能看它 —— 那会让甩出中的宠物被无关点击刹车。抓取走 `onGrab`
+  // （命中箱 `pointerdown`）；松开统一走 `onRelease`，这里只是设备流这条路径。
   useListen<MouseButtonState>('device-mouse-button', ({ payload }) => {
-    if (payload.pressed) {
-      // 抓取即落地刹车：组件自己会取消挤压动画，这里只要停下窗口飞行。
-      pressedRef.current = true
-      trailRef.current = []
-      stopFlight()
+    if (payload.pressed)
       return
-    }
-
-    if (!pressedRef.current)
-      return
-    pressedRef.current = false
-
-    const trail = trailRef.current
-    trailRef.current = []
-    const release = estimateReleaseVelocity(trail, performance.now(), 1)
-    if (release !== null)
-      pet.fling(release)
+    onRelease()
   })
 
   /** 终止飞行（含尚未起飞的请求）：抓取、下一次甩出、卸载都走这里。 */
@@ -120,7 +116,42 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): (
     rafRef.current?.pause()
   }
 
-  return (event: PetPhysicsEvent): void => {
+  return { onFling, onGrab, onRelease }
+
+  /**
+   * 抓住宠物（命中箱上的左键按下）：立刻刹车 + 清空轨迹。
+   *
+   * 组件自己会取消挤压动画，这里只要停下窗口飞行；轨迹从抓取这一刻重新计时，
+   * 抓取前的窗口位移不再算进这次甩动的速度。刹车发生在按下瞬间（不等拖拽门槛），
+   * 因此「接住飞过来的宠物」和「按下不动」都能让它停住。
+   */
+  function onGrab(): void {
+    pressedRef.current = true
+    trailRef.current = []
+    stopFlight()
+  }
+
+  /**
+   * 松开宠物：结算一次甩动，并清掉「按住」状态。
+   *
+   * 命中箱的 `pointerup`（经 `useWindowDraggable({ onRelease })`）与后端设备流的松开都
+   * 指向这里，重复的松开只生效一次。少了这条「谁先到谁结算」的路径，漏掉的松开会让
+   * `pressedRef` 一直是 true：轨迹继续采样窗口位移，很久以后一次无关点击就能把宠物甩出去。
+   */
+  function onRelease(): void {
+    if (!pressedRef.current)
+      return
+    pressedRef.current = false
+
+    const trail = trailRef.current
+    trailRef.current = []
+    const release = estimateReleaseVelocity(trail, performance.now(), 1)
+    if (release !== null)
+      pet.fling(release)
+  }
+
+  /** 组件校验后的甩出请求：读出几何与屏幕工作区，把这次甩动变成一次飞行。 */
+  function onFling(event: PetPhysicsEvent): void {
     const id = flightIdRef.current + 1
     flightIdRef.current = id
     flightRef.current = null
@@ -190,4 +221,20 @@ interface Flight {
 /** `device-mouse-button` 的事件载荷（对应 Rust 的 `MouseButtonState`）。 */
 interface MouseButtonState {
   pressed: boolean
+}
+
+/** 甩动控制的出口：`onFling` 接组件回吐的甩出请求，`onGrab`/`onRelease` 接命中箱上的抓取与松开。 */
+export interface PetPhysicsControls {
+  /** 组件校验后的甩出请求（接到 `<Pet onFling>`）。 */
+  onFling: (event: PetPhysicsEvent) => void
+  /**
+   * 抓住宠物：接到命中箱的 `pointerdown`（经 `useWindowDraggable({ onGrab })`，
+   * 见 `src/pet/app.tsx`）。
+   */
+  onGrab: () => void
+  /**
+   * 松开宠物：接到拖拽手势结束时的那一次通知（经 `useWindowDraggable({ onRelease })`）。
+   * 与后端 `device-mouse-button` 的松开共用同一条结算路径，重复上报只生效一次。
+   */
+  onRelease: () => void
 }

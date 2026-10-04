@@ -1573,6 +1573,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::set_pet_size,
         crate::bridge::push_pet_session,
         crate::bridge::move_pet_window,
+        crate::bridge::persist_pet_window_position,
         crate::bridge::set_pet_ignore_cursor_events,
         crate::bridge::list_pets,
         crate::bridge::import_pet,
