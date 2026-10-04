@@ -42,6 +42,7 @@
 - 🔄 **Runtime management** — Install dependencies, select core versions, and access desktop/core updates.
 - 🧩 **Plugin management** — 11 built-in plugins, plus community plugin installation, upgrades, removal, and error details.
 - 🗂️ **Profile configuration** — Separate plugin/settings configurations; profiles are not an OS security sandbox.
+- 💽 **Data directory** — Pick where data lives during installation (Windows installer); migrate or roll it back later in Settings on Windows, macOS, and Linux.
 - ⌨️ **CLI integration** — Managed `dsh` / `pnpm` shims, not a global npm core installation.
 - 🐾 **Desktop pets** — Pets / Codex resources, pack imports, and conversation activity; preset media comes from remote hosts.
 - 🎨 **Personalization** — 8 palettes, terminal mode, and native transparency, with one-click restore to defaults.
@@ -103,6 +104,8 @@ brew install dsh-tauri/desktop/deepseek-harness
 - For Linux display, Wayland, AppImage, and permission workarounds, see the [installation and troubleshooting docs](https://dshtauri.mintlify.site).
 
 ## Runtime
+
+On Windows, `STARTUP_LOW_INTEGRITY` means the process is running below Medium integrity and cannot write normal user data. This can happen when an installation folder has an inherited Low integrity label: a replacement executable can inherit it during an update. Inspect the folder and executable with `icacls`; restore the trusted installation's labels to Medium, or reinstall into a normal folder. Running the same Low-labeled executable as administrator does not remove its integrity restriction. Keep sessions and `DSH_HOME` unchanged. Startup failures now show a native Windows dialog with the underlying error.
 
 | Current baseline | Version |
 | --- | --- |
