@@ -16,9 +16,10 @@ const TRAIL_LIMIT = 64
  * 组件 0.2.3 起把甩动物理留给宿主（见组件 `docs/spec/pet-interactions.md` 的职责划分），
  * 桌宠宿主的舞台就是显示器工作区、宠物本体就是窗口，于是飞行 = 每帧 `setPosition`：
  *
- * - **轨迹来自窗口 `Moved`**：原生拖拽跑在系统模态循环里，webview 收不到 pointermove，
- *   窗口位移是唯一能看出「甩得多快」的信号；`device-mouse-button` 给的是 OS 侧的松开
- *   时刻（见 `use-window-draggable.ts`），两者拼出一次甩动；
+ * - **轨迹来自窗口 `Moved`**：拖拽由 `use-window-draggable.ts` 的弹簧每帧 `setPosition`
+ *   驱动，命中箱的 `pointermove` 是相对窗口的坐标、会自我反馈，因此窗口位移仍是能看出
+ *   「甩得多快」的信号；`device-mouse-button` 给的是 OS 侧的松开时刻（见
+ *   `use-window-draggable.ts`），两者拼出一次甩动；
  * - **增益只在 `onFling` 里施加**：松手时先用 `throwPower = 1` 判断「这一下要不要甩」，
  *   组件回吐的 `PetPhysicsEvent` 才带着合并后的 `physics`（prop > 配置 > 默认），速度的
  *   `throwPower` 放大因此只能在那里做 —— 默认值 1 时与组件参考实现完全等价；
@@ -63,7 +64,7 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): (
   rafRef.current = raf
 
   useEffect(() => {
-    // keep:effect 原生拖拽期间 webview 收不到 pointermove，只能靠窗口 Moved 采轨迹
+    // keep:effect 拖拽的每帧 setPosition 同样触发 Moved，甩动轨迹以窗口位移为准
     let disposed = false
     let unlisten: (() => void) | undefined
 

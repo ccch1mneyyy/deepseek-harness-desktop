@@ -31,7 +31,7 @@ export function App() {
   // 甩动：松手后按窗口轨迹估速请求组件甩出，飞行积分与落地 Q 弹都在宿主（见 hook 文档）。
   const onFling = usePetPhysics(pet, source?.kind)
   usePetWindowSize(width, source?.aspect ?? PET_DSH_ASPECT, visible)
-  useOmitIgnoreCursorEvents(hitboxRef)
+  useOmitIgnoreCursorEvents(hitboxRef, draggable.dragging)
   useEventListener('contextmenu', event => event.preventDefault())
   useWakelockRelease()
 
@@ -56,9 +56,7 @@ export function App() {
           hidden={!visible}
           hitboxRef={hitboxRef}
           onHitboxPointerDown={draggable.onPointerDown}
-          onHitboxPointerMove={draggable.onPointerMove}
           onHitboxPointerUp={draggable.onPointerUp}
-          onHitboxPointerCancel={draggable.onPointerCancel}
           onError={reportPetAssetError}
         />
       )}

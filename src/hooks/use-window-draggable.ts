@@ -1,11 +1,21 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useTimeoutFn } from '@reause/core'
+import { useRafFn, useTimeoutFn } from '@reause/core'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window'
 import { useEffect, useRef, useState } from 'react'
 import { useListen } from '@/hooks/use-listen'
 
 /** 拖拽的水平方向。 */
 type DragDirection = 'left' | 'right'
+
+/**
+ * `device-mouse-move` 事件载荷：全局光标位置（虚拟屏幕物理像素，
+ * 与窗口 `outerPosition()` 同一坐标系）。对应后端 `MouseCursorPos`。
+ */
+interface DeviceMousePosition {
+  x: number
+  y: number
+}
 
 /**
  * `device-mouse-button` 事件载荷：全局鼠标左键是否按下。
@@ -16,65 +26,95 @@ interface MouseButtonState {
 }
 
 export interface UseWindowDraggableResult {
-  /** 拖拽会话进行中（按下后位移超过阈值才算，结束或兜底收尾后为 false）。 */
+  /** 拖拽会话进行中（越过手势门槛才算，松手或兜底收尾后为 false）。 */
   dragging: boolean
   /** 当前拖拽方向；未拖拽、位移不足或拖拽停顿时为 undefined。 */
   direction: DragDirection | undefined
-  /** 命中箱 pointerdown（`<Pet>` 的 `onHitboxPointerDown`）：开启会话并捕获指针。 */
+  /** 命中箱 pointerdown（`<Pet>` 的 `onHitboxPointerDown`）：开启手势并记录按下位置。 */
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
-  /** 命中箱 pointermove（`<Pet>` 的 `onHitboxPointerMove`）：按指针增量移动窗口。 */
-  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
-  /** 命中箱 pointerup / pointercancel：结束会话。 */
-  onPointerUp: () => void
-  onPointerCancel: () => void
+  /** 命中箱 pointerup（`<Pet>` 的 `onHitboxPointerUp`）：指针侧即时收尾。 */
+  onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void
 }
 
-/** 判定「真正开始拖拽」的累计位移阈值（逻辑像素）：未达阈值按单击处理。 */
-const DRAG_START_THRESHOLD = 8
-/** 判定方向的水平位移阈值（逻辑像素），滤除拖拽起始时刻的抖动。 */
+/**
+ * 手势门槛（CSS px）：与上游 playground `usePetDrag` 的 `Math.hypot(dx, dy) < 5` 一致，
+ * 门槛内按单击处理（组件的挤压反馈）。换算成物理像素时乘 `devicePixelRatio`。
+ */
+const DRAG_START_THRESHOLD = 5
+/** 方向判定阈值（CSS px）：与上游 `Math.abs(x - last.x) >= 3` 一致。 */
 const DRAG_DIRECTION_THRESHOLD = 3
-/** 方向停摆阈值：超过此时长没有新的 pointermove，方向归零（宠物回到 idle/会话动画）。 */
+/**
+ * 弹簧参数（上游 playground 同值）：刚度 K=200 /s²、阻尼 C=30 /s。
+ * 阻尼比 C / (2√K) ≈ 1.06，略过阻尼 —— 这是「缓慢跟手、不振荡」的来源。
+ */
+const FOLLOW_STIFFNESS = 200
+const FOLLOW_DAMPING = 30
+/** 单帧积分上限与子步上限：与上游一致，大帧切成 1/120 子步，显式弹簧不会发散。 */
+const MAX_FRAME_DELTA = 0.05
+const MAX_SUBSTEP = 1 / 120
+/** 方向停摆阈值：超过此时长没有新的光标样本，方向归零（宠物回到 idle/会话动画）。 */
 const DRAG_DIRECTION_IDLE_TIMEOUT = 350
-/** 会话兜底阈值：超过此时长没有新的 pointermove，且左键状态未知/已松开时收尾拖拽。 */
+/** 会话兜底阈值：超过此时长没有新的光标样本，且左键状态未知/已松开时收尾拖拽。 */
 const DRAG_SESSION_TIMEOUT = 1500
 
+/** 一次拖拽手势的状态（位置/速度与窗口、光标流同一坐标系：虚拟屏幕物理像素）。 */
+interface Gesture {
+  /** 指针 id：只有同一根指针的 pointerup 才结束会话。 */
+  pointerId: number
+  /** 手势原点：按下瞬间的光标位置；按下时设备流还没有样本则顺延到首个样本。 */
+  anchor: { x: number, y: number } | undefined
+  /** 手势原点处的窗口左上角；读窗口位置是异步的，读到之前不进入跟手。 */
+  base: { x: number, y: number } | undefined
+  /** 弹簧积分出的窗口位置。 */
+  x: number
+  y: number
+  /** 弹簧速度。 */
+  vx: number
+  vy: number
+  /** 是否越过手势门槛（门槛前窗口不动，位移由门槛后的弹簧按原点补齐）。 */
+  engaged: boolean
+  /** 方向判定用的上一个样本（上游拿轨迹末段比较）。 */
+  lastSample: { x: number, y: number } | undefined
+}
+
 /**
- * 桌宠窗口拖拽（桌宠窗口在用）：跟随指针增量移动窗口，供上层切换 moving-left/right。
+ * 桌宠窗口拖拽（桌宠窗口在用）：按上游 playground 的「弹簧跟手」移动窗口。
  *
- * # 为什么是「跟随指针」而不是原生 `startDragging()`
+ * # 手感来自上游 playground 的 `usePetDrag`
  *
- * 原生拖拽把移动交给系统模态循环：窗口位置由系统直接更新，指针与窗口之间没有任何插值，
- * 手感是「窗口咬着光标跳」。`dsh-pet-component` README「拖拽交互集成」里的官方用法相反：
- * 组件不接管指针会话，宿主在 `onHitboxPointerDown` 里自行 `setPointerCapture`、在
- * `onHitboxPointerMove` 里采样增量并移动窗口 —— 这条「宿主驱动」的路径才与网页版一致。
- * 因此这里与官方用法对齐：命中箱按下时捕获指针，之后每个 pointermove 都把
- * `clientX/clientY` 增量交给 `move_pet_window`（后端按物理像素累加并夹回可见显示器）。
+ * 上游官方用例拖动时是「缓慢跟手」：5px 手势门槛、指针为弹簧目标、K=200/C=30 的
+ * 显式弹簧每帧积分，位置在门槛之后才更新。这里逐条照搬（含 `Math.hypot` 门槛、
+ * 3px 方向判定、单帧 0.05s 与 1/120 子步上限），只把「舞台里的 DOM 盒子」换成
+ * 「显示器里的窗口」：盒子用 `style.left/top` 定位，窗口用 `setPosition` 定位。
  *
- * # 为什么用指针增量，而不是复用窗口 `Moved` 事件
+ * # 指针位置为什么取后端 `device-mouse-move`，而不是 DOM `pointermove`
  *
- * 指针增量是拖拽的「输入」，窗口 `Moved` 是「输出」：拿输出反推方向会晚一帧；而且原生
- * 拖拽期间 webview 收不到 pointermove，只能靠 Moved 事件停歇猜结束。代价是
- * `move_pet_window` 每次调用都要读窗口位置/尺寸、枚举显示器、写回持久化位置，不适合
- * 一个 pointermove 一次 IPC：这里在本地累积增量，同一时刻只允许一个 IPC 在途
- * （`movingRef`），返回后再冲刷下一批。指针增量是逻辑像素、窗口位置是物理像素，
- * 因此按 `devicePixelRatio` 换算。
+ * 上游的盒子在固定视口里，`clientX/clientY` 与盒子位置互不影响；桌宠的「盒子」
+ * 就是窗口本身，`clientX` 是相对窗口的坐标 —— 窗口一移动，同一个光标位置的
+ * `clientX` 就反向变化，形成「窗口动过 → 增量变小 → 窗口不再动」的反馈：既抖，
+ * 又会把窗口留在指针后面追不上。后端设备流给的是**与窗口位置同一坐标系**的全局
+ * 物理像素，与窗口自身的移动无关，因此弹簧目标可以写成绝对量
+ * `base + (cursor - anchor)`，窗口必然收敛到指针处（静止时零偏移）。
+ * 附带好处：命中箱一旦被判定为「指针已离开」而切成穿透态，DOM `pointermove`
+ * 会断流，全局流不受影响（`useOmitIgnoreCursorEvents` 的命中判定用的也是它）。
  *
- * # 结束时刻：指针事件为主，后端设备流兜底
+ * # 结束时刻：设备流为主，指针事件为快路径
  *
- * 指针被命中箱捕获后，`pointerup` / `pointercancel` 一般可靠到达，拖拽即时收尾。
- * 若指针事件流异常中断（丢掉 pointerup 会让拖拽态永久粘住、宠物一直播拖动动画），
- * 还有两级兜底：后端全局鼠标流用 `device-mouse-button` 上报 OS 侧左键状态，松开即收尾；
- * 以及 pointermove 停歇超过 `DRAG_SESSION_TIMEOUT` 时收尾 —— 但仅在左键状态未知或
- * 已松开时才收尾，设备流仍报告按下（拖拽中长时间静止）时只重新计时，
- * 避免「按住不动再拖」被误判为结束。
+ * 后端设备流用 `device-mouse-button` 上报 OS 侧左键状态，松开即收尾；命中箱的
+ * `pointerup` 是更快的同源信号（同一 `pointerId` 才认）。**不认 `pointercancel`**：
+ * 拖拽中命中区可能被判成「指针已离开」而切成穿透态，webview 会因此取消指针会话，
+ * 若把它当作结束，窗口就会定格在半路（正是要修的「滞留在后面」）。收尾兜底是
+ * `DRAG_SESSION_TIMEOUT`，且设备流确认仍按住时只重新计时，不误杀「按住不动再拖」。
+ *
+ * # 收尾写回
+ *
+ * 跟手期间每帧直接 `setPosition`（与飞行同一套做法，绝对定位不会累积漂移）；
+ * 结束时用 `move_pet_window(0, 0)` 让后端把窗口夹回可见显示器并持久化最终位置。
  */
 export function useWindowDraggable(): UseWindowDraggableResult {
-  const activeRef = useRef(false)
-  const engagedRef = useRef(false)
-  const originRef = useRef<{ x: number, y: number } | undefined>(undefined)
-  const lastRef = useRef<{ x: number, y: number } | undefined>(undefined)
-  const pendingDeltaRef = useRef({ x: 0, y: 0 })
-  const movingRef = useRef(false)
+  const gestureRef = useRef<Gesture | null>(null)
+  /** 后端设备流最近一次上报的光标位置。 */
+  const cursorRef = useRef<{ x: number, y: number } | undefined>(undefined)
   /**
    * 后端设备流最近一次上报的左键状态。`true` = 确认仍按下（拖拽中长时间静止不算结束）；
    * `undefined` = 本次会话没有收到过上报（设备流失联，停歇兜底按「未知」收尾）。
@@ -82,12 +122,15 @@ export function useWindowDraggable(): UseWindowDraggableResult {
    * 「按住不动再拖」被停歇阈值误杀；改为在会话结束时重置。
    */
   const pressedRef = useRef<boolean | undefined>(undefined)
+  /** useRafFn 每渲染返回新对象，弹簧循环统一走 ref，避免闭包抓到旧的 pause/resume。 */
+  const rafRef = useRef<{ pause: () => void, resume: () => void } | null>(null)
+  /** 最近一次已下发的取整位置：位置没变就不重复发 IPC（按住不动时每帧一次没有意义）。 */
+  const appliedRef = useRef<{ x: number, y: number } | undefined>(undefined)
   const [dragging, setDragging] = useState(false)
   const [direction, setDirection] = useState<DragDirection | undefined>(undefined)
 
   // reause 的 `useTimeoutFn` 缺省在挂载时就开始计时，这里必须 `immediate: false`：
-  // 只有拖拽中的 pointermove 才重新 `start()`（等价于「重置计时」）。回调始终读取最新闭包，
-  // 且只操作 ref 与 setState，因此不需要额外的 clearTimeout 记账。
+  // 只有拖拽中的事件才重新 `start()`（等价于「重置计时」）。
   const { start: armDirectionTimer, stop: stopDirectionTimer } = useTimeoutFn(
     parkDirection,
     DRAG_DIRECTION_IDLE_TIMEOUT,
@@ -99,14 +142,49 @@ export function useWindowDraggable(): UseWindowDraggableResult {
     { immediate: false },
   )
 
+  // 弹簧积分循环：与上游 playground 的 `useRafFn` 回调逐行对应（目标取绝对位置，
+  // 因此门槛前丢掉的位移会在门槛后一次性补上，而不是像增量累加那样永久丢失）。
+  const raf = useRafFn(({ delta }) => {
+    const gesture = gestureRef.current
+    const cursor = cursorRef.current
+    if (gesture === null || !gesture.engaged || gesture.anchor === undefined || gesture.base === undefined || cursor === undefined) {
+      rafRef.current?.pause()
+      return
+    }
+    const targetX = gesture.base.x + (cursor.x - gesture.anchor.x)
+    const targetY = gesture.base.y + (cursor.y - gesture.anchor.y)
+    let remaining = Math.min(MAX_FRAME_DELTA, Math.max(0, delta / 1000))
+    // resume 后的首帧 delta 为 0（时间戳起点），空帧不产生位移也不需要下发 IPC。
+    if (remaining <= 0)
+      return
+    while (remaining > 0) {
+      const dt = Math.min(remaining, MAX_SUBSTEP)
+      gesture.vx += ((targetX - gesture.x) * FOLLOW_STIFFNESS - gesture.vx * FOLLOW_DAMPING) * dt
+      gesture.vy += ((targetY - gesture.y) * FOLLOW_STIFFNESS - gesture.vy * FOLLOW_DAMPING) * dt
+      gesture.x += gesture.vx * dt
+      gesture.y += gesture.vy * dt
+      remaining -= dt
+    }
+    // 窗口位置取整：亚像素位置在 Windows 上会被系统四舍五入，抖动比丢精度更显眼。
+    const nextX = Math.round(gesture.x)
+    const nextY = Math.round(gesture.y)
+    if (appliedRef.current?.x === nextX && appliedRef.current.y === nextY)
+      return
+    appliedRef.current = { x: nextX, y: nextY }
+    void getCurrentWindow()
+      .setPosition(new PhysicalPosition(nextX, nextY))
+      .catch(() => {})
+  }, { immediate: false })
+  rafRef.current = raf
+
   /** 暂停移动：方向归零（宠物回到 idle/会话动画），但拖拽会话保持存活。 */
   function parkDirection(): void {
     setDirection(undefined)
   }
 
-  /** 拖拽会话兜底：pointermove 停歇超过 `DRAG_SESSION_TIMEOUT` 时触发（见 hook 文档）。 */
+  /** 拖拽会话兜底：光标样本停歇超过 `DRAG_SESSION_TIMEOUT` 时触发（见 hook 文档）。 */
   function handleSessionTimeout(): void {
-    if (activeRef.current && pressedRef.current === true) {
+    if (gestureRef.current !== null && pressedRef.current === true) {
       armSessionTimer()
       return
     }
@@ -114,95 +192,107 @@ export function useWindowDraggable(): UseWindowDraggableResult {
   }
 
   function endDrag(): void {
-    activeRef.current = false
-    engagedRef.current = false
-    originRef.current = undefined
-    lastRef.current = undefined
-    pendingDeltaRef.current = { x: 0, y: 0 }
+    const gesture = gestureRef.current
+    gestureRef.current = null
     pressedRef.current = undefined
+    appliedRef.current = undefined
     stopDirectionTimer()
     stopSessionTimer()
+    rafRef.current?.pause()
     setDragging(false)
     setDirection(undefined)
+    if (gesture?.engaged === true) {
+      // 收尾交给后端：`move_pet_window(0, 0)` 按当前真实位置夹回可见显示器并持久化，
+      // 前端不用自己算夹取（拖到屏幕外松手也能被拉回来）。
+      void invoke('move_pet_window', { deltaX: 0, deltaY: 0 }).catch(() => {})
+    }
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (event.button !== 0)
+    if (event.button !== 0 || event.isPrimary === false || gestureRef.current !== null)
       return
-    // 捕获指针：命中箱之外（宠物透明像素、窗口边界外）的 pointermove 依然回到命中箱，
-    // 因此不需要 window 级监听，也不会因为 `<Pet>` 在提交阶段才挂上命中箱而漏绑。
+    const latest = cursorRef.current
+    const gesture: Gesture = {
+      pointerId: event.pointerId,
+      anchor: latest === undefined ? undefined : { x: latest.x, y: latest.y },
+      base: undefined,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      engaged: false,
+      lastSample: undefined,
+    }
+    gestureRef.current = gesture
+    // 按下即开始兜底计时：设备流与指针事件同时中断时也能收尾。
+    armSessionTimer()
     // 不调用 preventDefault：取消 pointerdown 会抑制兼容鼠标事件，文本选择/触屏滚动
     // 已由样式（select-none / touch-none）防护。
-    event.currentTarget.setPointerCapture(event.pointerId)
-    activeRef.current = true
-    engagedRef.current = false
-    const origin = { x: event.clientX, y: event.clientY }
-    originRef.current = origin
-    lastRef.current = origin
-    pendingDeltaRef.current = { x: 0, y: 0 }
-    setDirection(undefined)
-  }
-
-  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (!activeRef.current)
-      return
-    const last = lastRef.current
-    if (last === undefined)
-      return
-    const current = { x: event.clientX, y: event.clientY }
-    const origin = originRef.current ?? current
-    const dx = current.x - last.x
-    const dy = current.y - last.y
-    lastRef.current = current
-    // 事件流仍在推进：重置「方向停摆」与「会话兜底」两级计时。
-    armDirectionTimer()
-    armSessionTimer()
-    if (dx !== 0 || dy !== 0) {
-      // 指针增量是逻辑像素，窗口位置是物理像素（后端 `move_pet_window` 按物理像素累加）。
-      const scale = globalThis.devicePixelRatio || 1
-      pendingDeltaRef.current.x += Math.round(dx * scale)
-      pendingDeltaRef.current.y += Math.round(dy * scale)
-    }
-    if (!engagedRef.current) {
-      // 未达拖拽阈值：单击/轻微抖动不算拖拽，也不移动窗口（位移基准保持不动，
-      // 越过阈值时一次性把这段累计位移补上，避免窗口落后指针一个阈值）。
-      if (Math.hypot(current.x - origin.x, current.y - origin.y) < DRAG_START_THRESHOLD)
+    void getCurrentWindow().outerPosition().then((position) => {
+      if (gestureRef.current !== gesture)
         return
-      engagedRef.current = true
-      setDragging(true)
-    }
-    if (Math.abs(dx) >= DRAG_DIRECTION_THRESHOLD)
-      setDirection(dx > 0 ? 'right' : 'left')
-    flushMove()
-  }
-
-  function flushMove(): void {
-    if (movingRef.current)
-      return
-    const delta = pendingDeltaRef.current
-    if (delta.x === 0 && delta.y === 0)
-      return
-    // 先清零再发：窗口可能已被夹在屏幕边缘（后端 `clamp_window_position` 丢弃越界增量），
-    // 已消费的增量不再补发，反向拖动时不会先「滑回」一段。
-    pendingDeltaRef.current = { x: 0, y: 0 }
-    movingRef.current = true
-    void invoke('move_pet_window', { deltaX: delta.x, deltaY: delta.y }).catch(() => {}).finally(() => {
-      movingRef.current = false
-      flushMove()
+      gesture.base = { x: position.x, y: position.y }
+    }).catch(() => {
+      // 读不到窗口位置就无法把光标位移映射成窗口位置：放弃这次手势（单击反馈照常）。
+      if (gestureRef.current === gesture)
+        endDrag()
     })
   }
 
+  function handlePointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (event.button !== 0 || gestureRef.current?.pointerId !== event.pointerId)
+      return
+    endDrag()
+  }
+
+  useListen<DeviceMousePosition>('device-mouse-move', ({ payload }) => {
+    cursorRef.current = { x: payload.x, y: payload.y }
+    const gesture = gestureRef.current
+    if (gesture === null)
+      return
+    // 事件流仍在推进：重置「会话兜底」计时。
+    armSessionTimer()
+    if (gesture.anchor === undefined) {
+      // 设备流首个样本：手势原点顺延到这里（按下时还没有样本，等价于从此刻起跟手）。
+      gesture.anchor = { x: payload.x, y: payload.y }
+      gesture.lastSample = { x: payload.x, y: payload.y }
+      return
+    }
+    const scale = globalThis.devicePixelRatio || 1
+    const dx = payload.x - gesture.anchor.x
+    const dy = payload.y - gesture.anchor.y
+    if (!gesture.engaged) {
+      // 门槛前窗口不动；越过门槛时从窗口原位起步，弹簧目标始终按原点算。
+      if (Math.hypot(dx, dy) < DRAG_START_THRESHOLD * scale || gesture.base === undefined)
+        return
+      gesture.x = gesture.base.x
+      gesture.y = gesture.base.y
+      gesture.vx = 0
+      gesture.vy = 0
+      gesture.engaged = true
+      appliedRef.current = undefined
+      setDragging(true)
+      rafRef.current?.resume()
+    }
+    const last = gesture.lastSample
+    if (last !== undefined && Math.abs(payload.x - last.x) >= DRAG_DIRECTION_THRESHOLD * scale)
+      setDirection(payload.x > last.x ? 'right' : 'left')
+    gesture.lastSample = { x: payload.x, y: payload.y }
+    armDirectionTimer()
+  })
+
   // 只认松开：拖拽会话由 onPointerDown 开启，后端设备流补的是 OS 侧的结束时刻
-  // （指针事件流失联导致丢 pointerup 时，靠它保证拖拽态不粘住）。
+  // （命中箱切成穿透态后收不到 pointerup 时，靠它保证拖拽不粘住/不半路定格）。
   useListen<MouseButtonState>('device-mouse-button', ({ payload }) => {
     if (payload.pressed) {
       pressedRef.current = true
       return
     }
+    pressedRef.current = false
     endDrag()
   })
 
-  // keep:effect 拉起后端鼠标设备流（左键状态是丢 pointerup 时的兜底信号）；命令幂等，
+  // keep:effect 拉起后端鼠标设备流（光标位置与左键状态都来自它）；命令幂等，
   // 渲染期调用会在每次重渲染重复发起 IPC。
   useEffect(() => {
     void invoke('start_pet_mouse_stream').catch(() => {})
@@ -212,8 +302,6 @@ export function useWindowDraggable(): UseWindowDraggableResult {
     dragging,
     direction,
     onPointerDown: handlePointerDown,
-    onPointerMove: handlePointerMove,
-    onPointerUp: endDrag,
-    onPointerCancel: endDrag,
+    onPointerUp: handlePointerUp,
   }
 }

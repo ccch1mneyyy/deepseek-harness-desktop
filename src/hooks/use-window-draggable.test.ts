@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
+import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { UseWindowDraggableResult } from './use-window-draggable'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWindowDraggable } from './use-window-draggable'
 
-interface MovedEvent { payload: { x: number, y: number } }
-type MovedHandler = (event: MovedEvent) => void
-
 /**
- * 本文件把 `useListen` 替换成同步登记表：拖拽收尾依赖后端设备流事件，而真实
- * `listen` 要走 Tauri IPC，在 jsdom 里无法投递。
+ * 本文件把 `useListen` 替换成同步登记表：跟手的坐标来源（`device-mouse-move`）与
+ * 松手信号（`device-mouse-button`）都来自后端设备流，而真实 `listen` 要走 Tauri
+ * IPC，在 jsdom 里无法投递。
  */
 const deviceListeners = vi.hoisted(() => new Map<string, (event: { payload: unknown }) => void>())
 
@@ -18,126 +18,313 @@ vi.mock('@/hooks/use-listen', () => ({
   },
 }))
 
-const windowMocks = vi.hoisted(() => ({
-  startDragging: vi.fn<() => Promise<void>>(),
-  onMoved: vi.fn<(handler: MovedHandler) => Promise<() => void>>(),
-}))
-
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: () => windowMocks,
-}))
-
-const invokeMock = vi.hoisted(() => vi.fn<(command: string) => Promise<void>>())
+const invokeMock = vi.hoisted(() => vi.fn<(command: string, args?: Record<string, number>) => Promise<void>>())
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock,
 }))
 
-/** 与 `use-window-draggable.ts` 的 `DRAG_SESSION_TIMEOUT` 一致（模块私有，不导出）。 */
+/** 只 mock 窗口位置读写：跟手就是每帧把窗口绝对定位到弹簧算出的位置。 */
+const windowMock = vi.hoisted(() => ({
+  outerPosition: vi.fn<() => Promise<{ x: number, y: number }>>(),
+  setPosition: vi.fn<(position: { x: number, y: number }) => Promise<void>>(),
+}))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => windowMock,
+  PhysicalPosition: class PhysicalPosition {
+    x: number
+    y: number
+    constructor(x: number, y: number) {
+      this.x = x
+      this.y = y
+    }
+  },
+}))
+
+/** 与 `use-window-draggable.ts` 的常量一致（模块私有，不导出）。 */
+const DRAG_START_THRESHOLD = 5
+const DRAG_DIRECTION_IDLE_TIMEOUT = 350
 const DRAG_SESSION_TIMEOUT = 1500
+/** jsdom 的 `devicePixelRatio` 恒为 1（门槛按 `5 * SCALE` 换算）。 */
+const SCALE = globalThis.devicePixelRatio || 1
+/** 按下时的窗口左上角（物理像素）。 */
+const BASE = { x: 1000, y: 500 }
+/** 按下时的光标位置（物理像素，与窗口同一坐标系）。 */
+const CURSOR = { x: 500, y: 300 }
 
-let movedHandlers: MovedHandler[] = []
+/** 造一个命中箱指针事件：hook 只用按钮/指针 id/主指针标记。 */
+function pointerEvent(options: { button?: number, isPrimary?: boolean, pointerId?: number } = {}): ReactPointerEvent<HTMLDivElement> {
+  return {
+    button: options.button ?? 0,
+    pointerId: options.pointerId ?? 1,
+    isPrimary: options.isPrimary ?? true,
+  } as unknown as ReactPointerEvent<HTMLDivElement>
+}
 
-/** 按下左键：webview 收到 pointerdown 后才会开启拖拽会话。 */
-function pressPointer(): void {
-  const event = new Event('pointerdown', { bubbles: true })
-  Object.defineProperty(event, 'button', { value: 0 })
-  act(() => {
-    window.dispatchEvent(event)
+/** 让在途的 promise 回调（如按下的 `outerPosition()`）落地。 */
+async function settlePromises(): Promise<void> {
+  await act(async () => {
+    for (let index = 0; index < 4; index += 1)
+      await Promise.resolve()
   })
 }
 
-/** 原生拖拽期间窗口移动（Windows 上拖拽会话吞掉按钮事件，只剩 Moved）。 */
-function moveWindow(x: number, y: number): void {
+async function press(draggable: UseWindowDraggableResult, options?: { button?: number, pointerId?: number }): Promise<void> {
   act(() => {
-    for (const handler of [...movedHandlers])
-      handler({ payload: { x, y } })
+    draggable.onPointerDown(pointerEvent(options))
+  })
+  // 按下要异步读窗口原位：不等它落地，滚动门槛时手势拿不到基准点。
+  await settlePromises()
+}
+
+function release(draggable: UseWindowDraggableResult, options?: { button?: number, pointerId?: number }): void {
+  act(() => {
+    draggable.onPointerUp(pointerEvent(options))
   })
 }
 
-/** 后端设备流的左键状态事件。 */
-function pressMouse(pressed: boolean): void {
+/** 后端设备流上报的光标位置（虚拟屏幕物理像素）。 */
+function emitCursor(x: number, y: number): void {
+  const handler = deviceListeners.get('device-mouse-move')
+  if (handler === undefined)
+    throw new Error('未订阅 device-mouse-move：跟手拿不到坐标')
+  act(() => {
+    handler({ payload: { x, y } })
+  })
+}
+
+/** 后端设备流上报的左键状态。 */
+function emitButton(pressed: boolean): void {
   const handler = deviceListeners.get('device-mouse-button')
   if (handler === undefined)
-    throw new Error('未订阅 device-mouse-button：松开判断退回 1.5s 停歇兜底（Bug 复现）')
+    throw new Error('未订阅 device-mouse-button：丢 pointerup 时无法收尾')
   act(() => {
     handler({ payload: { pressed } })
   })
 }
 
-/** 按下并拖过 `DRAG_START_THRESHOLD`，进入拖拽态。 */
-function startDraggingSession(): void {
-  pressPointer()
-  moveWindow(100, 100)
-  moveWindow(120, 100)
+/**
+ * 推进 rAF 帧（每帧 16ms）。注意 `useRafFn` 在 `resume()` 后的首帧 delta 为 0，
+ * 弹簧积分从第 2 帧才开始，所以「一步积分」需要至少 2 帧。
+ */
+function frames(count = 1): void {
+  act(() => {
+    vi.advanceTimersByTime(16 * count)
+  })
+}
+
+/** 按下并移动 `dx/dy` 物理像素，越过门槛进入拖拽态（真实场景按下前就有光标样本）。 */
+async function startDrag(draggable: UseWindowDraggableResult, dx = 12, dy = 0): Promise<void> {
+  emitCursor(CURSOR.x, CURSOR.y)
+  await press(draggable)
+  emitCursor(CURSOR.x + dx, CURSOR.y + dy)
+}
+
+/** 最近一次下发的窗口位置。 */
+function lastPosition(): { x: number, y: number } {
+  const last = windowMock.setPosition.mock.calls.at(-1)
+  if (last === undefined)
+    throw new Error('setPosition 从未被调用')
+  return last[0]
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
-  movedHandlers = []
   deviceListeners.clear()
-  windowMocks.startDragging.mockResolvedValue(undefined)
-  windowMocks.onMoved.mockImplementation(async (handler) => {
-    movedHandlers.push(handler)
-    return () => {
-      movedHandlers = movedHandlers.filter(item => item !== handler)
-    }
-  })
+  invokeMock.mockReset()
   invokeMock.mockResolvedValue(undefined)
+  windowMock.outerPosition.mockReset()
+  windowMock.outerPosition.mockResolvedValue({ x: BASE.x, y: BASE.y })
+  windowMock.setPosition.mockReset()
+  windowMock.setPosition.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
 describe('useWindowDraggable', () => {
-  it('松开左键时立即结束拖拽，不等 Moved 停歇超时', () => {
+  it('门槛内不移动窗口：位移不足时按单击处理', async () => {
     const { result } = renderHook(() => useWindowDraggable())
 
-    startDraggingSession()
+    emitCursor(CURSOR.x, CURSOR.y)
+    await press(result.current)
+    emitCursor(CURSOR.x + DRAG_START_THRESHOLD * SCALE - 1, CURSOR.y)
+    frames(4)
+
+    expect(result.current.dragging).toBe(false)
+    expect(windowMock.setPosition).not.toHaveBeenCalled()
+
+    release(result.current)
+    expect(invokeMock).not.toHaveBeenCalledWith('move_pet_window', expect.anything())
+  })
+
+  it('越门槛后进入拖拽态，窗口从原位起步缓慢追光标（第 1 帧只走一小段）', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 40)
     expect(result.current.dragging).toBe(true)
+
+    frames(2)
+    const first = lastPosition()
+    expect(first.x).toBeGreaterThan(BASE.x)
+    // 40px 的目标，第 1 帧只走几个像素 —— 这就是上游 playground 的「缓慢跟手」。
+    expect(first.x).toBeLessThan(BASE.x + 40)
+    expect(first.y).toBe(BASE.y)
+  })
+
+  it('窗口最终收敛到光标处：不会滞留在指针后面', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 40, 15)
+    frames(60)
+
+    expect(lastPosition()).toEqual({ x: BASE.x + 40, y: BASE.y + 15 })
+  })
+
+  it('弹簧追的是绝对位置：门槛前丢掉的位移会在越过门槛后补上', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    emitCursor(CURSOR.x, CURSOR.y)
+    await press(result.current)
+    // 门槛内先走 4px，再越门槛 —— 目标始终按「按下位置」算，不按增量累加。
+    emitCursor(CURSOR.x + 4, CURSOR.y)
+    expect(result.current.dragging).toBe(false)
+    emitCursor(CURSOR.x + 8, CURSOR.y)
+    expect(result.current.dragging).toBe(true)
+
+    frames(60)
+    expect(lastPosition()).toEqual({ x: BASE.x + 8, y: BASE.y })
+  })
+
+  it('手势门槛按 devicePixelRatio 换算成物理像素', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    const { result } = renderHook(() => useWindowDraggable())
+
+    emitCursor(CURSOR.x, CURSOR.y)
+    await press(result.current)
+    // 缩放 2 倍时门槛是 10 物理像素。
+    emitCursor(CURSOR.x + 8, CURSOR.y)
+    expect(result.current.dragging).toBe(false)
+
+    emitCursor(CURSOR.x + 12, CURSOR.y)
+    expect(result.current.dragging).toBe(true)
+  })
+
+  it('方向按相邻样本的水平位移判定，拖拽停顿时归零', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 12)
+    // 越过门槛的那一帧没有上一个样本，方向先不判定（与上游轨迹语义一致）。
+    expect(result.current.direction).toBeUndefined()
+
+    emitCursor(CURSOR.x + 16, CURSOR.y)
     expect(result.current.direction).toBe('right')
 
-    pressMouse(false)
+    emitCursor(CURSOR.x + 12, CURSOR.y)
+    expect(result.current.direction).toBe('left')
+
+    act(() => {
+      vi.advanceTimersByTime(DRAG_DIRECTION_IDLE_TIMEOUT)
+    })
+    expect(result.current.direction).toBeUndefined()
+    expect(result.current.dragging).toBe(true)
+
+    emitCursor(CURSOR.x + 20, CURSOR.y)
+    expect(result.current.direction).toBe('right')
+  })
+
+  it('pointerup 收尾，且只认同一个 pointerId', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 12)
+    expect(result.current.dragging).toBe(true)
+
+    release(result.current, { pointerId: 2 })
+    expect(result.current.dragging).toBe(true)
+
+    release(result.current, { pointerId: 1 })
+    expect(result.current.dragging).toBe(false)
+    expect(result.current.direction).toBeUndefined()
+  })
+
+  it('收尾时让后端夹回可见显示器并持久化位置', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 12)
+    release(result.current)
+
+    expect(invokeMock).toHaveBeenCalledWith('move_pet_window', { deltaX: 0, deltaY: 0 })
+  })
+
+  it('后端设备流报告松开时立即收尾，不等停歇阈值', async () => {
+    const { result } = renderHook(() => useWindowDraggable())
+
+    await startDrag(result.current, 12)
+    expect(result.current.dragging).toBe(true)
+
+    emitButton(false)
 
     expect(result.current.dragging).toBe(false)
     expect(result.current.direction).toBeUndefined()
   })
 
-  it('左键仍按下时不结束拖拽', () => {
+  it('设备流确认仍按住时，停歇超时不结束拖拽（按住不动再拖不会被误杀）', async () => {
     const { result } = renderHook(() => useWindowDraggable())
 
-    startDraggingSession()
-    pressMouse(true)
+    await startDrag(result.current, 12)
+    emitButton(true)
 
+    act(() => {
+      vi.advanceTimersByTime(DRAG_SESSION_TIMEOUT)
+    })
     expect(result.current.dragging).toBe(true)
+
+    emitCursor(CURSOR.x + 60, CURSOR.y)
+    frames(60)
+    expect(lastPosition()).toEqual({ x: BASE.x + 60, y: BASE.y })
   })
 
-  it('设备流失联时仍由 Moved 停歇兜底结束', () => {
+  it('设备流失联时仍由停歇阈值兜底收尾（丢 pointerup 不会永久粘住）', async () => {
     const { result } = renderHook(() => useWindowDraggable())
 
-    startDraggingSession()
+    await startDrag(result.current, 12)
+    expect(result.current.dragging).toBe(true)
+
     act(() => {
       vi.advanceTimersByTime(DRAG_SESSION_TIMEOUT)
     })
 
     expect(result.current.dragging).toBe(false)
+    expect(invokeMock).toHaveBeenCalledWith('move_pet_window', { deltaX: 0, deltaY: 0 })
   })
 
-  it('松开后再次按下并移动可重新进入拖拽', () => {
+  it('只认左键：右键按下不开启会话、不移动窗口', () => {
     const { result } = renderHook(() => useWindowDraggable())
 
-    startDraggingSession()
-    pressMouse(false)
+    act(() => {
+      result.current.onPointerDown(pointerEvent({ button: 2 }))
+    })
+    emitCursor(CURSOR.x + 40, CURSOR.y)
+    frames(4)
+
     expect(result.current.dragging).toBe(false)
+    expect(windowMock.setPosition).not.toHaveBeenCalled()
+  })
 
-    pressPointer()
-    moveWindow(200, 200)
-    moveWindow(230, 200)
+  it('读不到窗口原位时放弃这次手势，窗口保持不动', async () => {
+    windowMock.outerPosition.mockRejectedValue(new Error('window unavailable'))
+    const { result } = renderHook(() => useWindowDraggable())
 
-    expect(result.current.dragging).toBe(true)
+    await startDrag(result.current, 40)
+    frames(4)
+
+    expect(result.current.dragging).toBe(false)
+    expect(windowMock.setPosition).not.toHaveBeenCalled()
   })
 
   it('挂载时拉起后端鼠标设备流', () => {
