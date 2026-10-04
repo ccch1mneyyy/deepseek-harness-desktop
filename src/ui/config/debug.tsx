@@ -17,6 +17,7 @@ import { ConfigCloseAction } from '@/ui/config/components/close-action'
 import { ConfigLaunchOnLogin } from '@/ui/config/components/launch-on-login'
 import { useCoreBreakingConfirm } from '@/ui/config/hooks/use-core-breaking-confirm'
 import { useCoreProfileSwitch } from '@/ui/config/hooks/use-core-profile-switch'
+import { writeClipboardText } from '@/utils/clipboard'
 import { toast } from '@/utils/toast'
 
 const ZOOM_OPTIONS = Array.from({ length: 16 }, (_, index) => Number((0.5 + index * 0.1).toFixed(1)))
@@ -108,6 +109,22 @@ export function ConfigDebug() {
     onError: (err: unknown) => {
       console.error('[ConfigDebug] copy url failed:', err)
       toast(t('messages.copy_failed'), { variant: 'danger' })
+    },
+  })
+
+  const { mutate: onCopyEnvironment, isPending: copyingEnvironment } = useMutation({
+    mutationFn: async () => {
+      if (!info)
+        return
+      await writeClipboardText([
+        `${t('ui.current_version')}: ${info.app_version}`,
+        `${t('ui.dsh_version')}: ${info.dsh_version ?? '-'}`,
+        `${t('ui.node_version')}: ${info.node_version ? `v${info.node_version}` : '-'}`,
+        `${t('ui.platform')}: ${info.platform} / ${info.arch}`,
+      ].join('\n'), t('messages.environment_copied'))
+    },
+    onError: (err: unknown) => {
+      console.error('[ConfigDebug] copy environment info failed:', err)
     },
   })
 
@@ -266,6 +283,17 @@ export function ConfigDebug() {
           <Info term={t('ui.platform')}>
             {info ? `${info.platform} / ${info.arch}` : '-'}
           </Info>
+        </div>
+        <div className="mt-2 flex justify-end">
+          <Button
+            size="sm"
+            variant="secondary"
+            isDisabled={!info || copyingEnvironment}
+            onPress={() => onCopyEnvironment()}
+          >
+            <If cond={copyingEnvironment} then={<Spinner size="sm" color="current" />} else={<Copy className="size-3.5" />} />
+            {t('buttons.copy_environment')}
+          </Button>
         </div>
       </div>
       <div className="border-t border-line/30" />
