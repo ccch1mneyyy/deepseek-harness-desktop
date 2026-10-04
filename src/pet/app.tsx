@@ -14,25 +14,10 @@ import { normalizeSizePercent, usePetStatus } from './hooks/use-pet-status'
 import { usePetWindowSize } from './hooks/use-pet-window'
 import { reportPetIssue } from './utils/log'
 
-/**
- * 桌宠窗口的唯一组合入口。
- *
- * 三条输入各管一段，互不越界：
- * - 设置状态（`usePetStatus`）→ 选哪个宠物、多大、是否可见；
- * - 会话气泡（`useBubbleTracker`）→ 经 `pet.bubble(...)` 下发，**动作随气泡走**；
- * - 手势（`useWindowDraggable`）→ 拖动期间的方向动作。
- *
- * v0.2.0 起气泡完全由 `dsh-pet-component` 托管（叠加、原地更新、定时收起、多会话动作
- * 优先级），渲染细节（动画池解析、双视频缓冲、雪碧图、缓存、双击回应）同样如此：
- * 宿主只把 `motion` prop 留给拖动方向，会话档位随各自的气泡走。
- */
 export function App() {
   const petRef = useRef<PetRef>(null)
   const pet = useControllablePet(petRef)
   const status = usePetStatus()
-
-  // issue #469：桌宠动画是常驻播放的 <video>，Chromium 会因此持有 Video Wake Lock
-  // 让系统无法息屏；本窗口没有常亮的正当需求，唤醒锁一旦生效就立刻释放。
   const activedPet = status?.active_pet ?? ''
   const { source, error } = usePetSource(activedPet)
   const hitboxRef = useRef<HTMLDivElement>(null)
@@ -47,15 +32,11 @@ export function App() {
   useEventListener('contextmenu', event => event.preventDefault())
   useWakelockRelease()
 
-  // 手势优先于会话档位：拖动期间按方向播走路动画（dsh-pet 渲染器内部强制走 drag 池，
-  // 会忽略这里的方向，由组件保证）；拖动结束即回落 `undefined`，交给气泡聚合出的档位。
   const motion: PetRenderMotion | undefined = draggable.dragging
     ? (draggable.direction === undefined ? undefined : `moving-${draggable.direction}`)
     : undefined
 
   return (
-    // 外层只负责铺满透明窗口并让宠物锚定底部居中；窗口内可交互面只有命中箱，
-    // 其余区域由 useOmitIgnoreCursorEvents 按命中箱矩形整体穿透。
     <main className={`pointer-events-none fixed inset-0 flex items-end justify-center ${visible ? '' : 'invisible'}`}>
       {source && (
         <Pet
@@ -70,21 +51,18 @@ export function App() {
           cache={true}
           hidden={!visible}
           hitboxRef={hitboxRef}
+          onHitboxPointerDown={draggable.onPointerDown}
+          onHitboxPointerMove={draggable.onPointerMove}
+          onHitboxPointerUp={draggable.onPointerUp}
+          onHitboxPointerCancel={draggable.onPointerCancel}
           onError={reportPetAssetError}
         />
       )}
-      {/* 选中了宠物但资源解析不出来（导入的宠物被删除、清单里没有该 id）：必须给出
-          可见提示 —— 透明窗口里「空」与「在加载」观感相同，静默留空等于让用户以为坏了。 */}
       <If cond={error !== null} then={<Hint petId={activedPet} />} />
     </main>
   )
 }
 
-/**
- * 资源加载/播放失败的出口：组件内部抓取失败会静默降级为「直接播远端地址」
- * （`useCachedMediaUrl` 的 catch 只调 `onError`），而桌宠窗口的 console 要手动
- * F12 才看得见 —— 不接这个回调，「IndexedDB 一次都没写进去」就无从察觉。
- */
 function reportPetAssetError(error: unknown): void {
   reportPetIssue('asset', error)
 }
