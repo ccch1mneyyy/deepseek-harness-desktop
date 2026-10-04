@@ -41,12 +41,32 @@ describe('pet dragging follows the pointer (upstream spring feel)', () => {
 
   it('brakes a thrown pet only on a real grab, never on a click elsewhere', () => {
     // 抓取信号来自命中箱 pointerdown，经拖拽 hook 的 onGrab 转给甩动物理。
-    expect(app).toContain('useWindowDraggable({ onGrab })')
-    expect(app).toContain('const { onFling, onGrab } = usePetPhysics(pet, source?.kind)')
+    expect(app).toContain('useWindowDraggable({ onGrab: handleGrab, onRelease, clampPosition })')
+    expect(app).toContain('const { onFling, onGrab, onRelease } = usePetPhysics(pet, source?.kind)')
     expect(hook).toContain('onGrabRef.current?.()')
     // 全屏左键流只用来取「松开」时刻：任何位置的按下都不能刹车。
-    expect(physics).toContain('if (payload.pressed || !pressedRef.current)')
+    expect(physics).toContain('if (payload.pressed)')
     expect(physics).toContain('export interface PetPhysicsControls')
+  })
+
+  it('routes both release paths through one idempotent physics release', () => {
+    // 命中箱 pointerup 与后端设备流汇到同一个 `onRelease`，同一个手势只结算一次：
+    // 设备流丢事件时物理层不会一直以为还按着，把很久以后一次无关点击当成甩出。
+    expect(hook).toContain('onRelease?: () => void')
+    expect(hook).toContain('onReleaseRef.current?.()')
+    expect(physics).toContain('function onRelease(): void {')
+    expect(physics).toContain('return { onFling, onGrab, onRelease }')
+    expect(physics).toContain('onRelease: () => void')
+  })
+
+  it('clamps every follow frame to the pet body bounds so edge drops stay on the edge', () => {
+    // 跟手每帧夹取（上游 `getBounds` 的等价物），边界与飞行共用 `bodyBounds`。
+    expect(app).toContain('const { clampPosition, refreshWorkAreas } = usePetWindowClamp(pet, source?.kind)')
+    expect(hook).toContain('clampRef.current({ x: gesture.x, y: gesture.y })')
+    expect(readSource('src/pet/hooks/use-pet-window-clamp.ts')).toContain('bodyBounds(geometry, stage.width, stage.height, dsh)')
+    // 收尾只落盘：整窗夹取会把贴边松手的宠物推开一段（透明留白的宽度）。
+    expect(hook).toContain('void invoke(\'persist_pet_window_position\').catch(() => {})')
+    expect(hook).not.toContain('invoke(\'move_pet_window\'')
   })
 
   it('recomputes click-through when the window itself moves', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { UseWindowDraggableResult } from './use-window-draggable'
+import type { UseWindowDraggableOptions, UseWindowDraggableResult } from './use-window-draggable'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWindowDraggable } from './use-window-draggable'
@@ -52,6 +52,16 @@ const SCALE = globalThis.devicePixelRatio || 1
 const BASE = { x: 1000, y: 500 }
 /** 按下时的光标位置（物理像素，与窗口同一坐标系）。 */
 const CURSOR = { x: 500, y: 300 }
+
+/**
+ * 默认不夹取：本文件验证弹簧与手势本身，夹取边界另有专门用例。真实宿主必须给
+ * `clampPosition`（宠物靠它保证贴边合法，见 `use-pet-window-clamp.ts`）。
+ */
+const noClamp = (position: { x: number, y: number }): { x: number, y: number } => position
+
+function useDraggable(options: Partial<UseWindowDraggableOptions> = {}): UseWindowDraggableResult {
+  return useWindowDraggable({ clampPosition: noClamp, ...options })
+}
 
 /** 造一个命中箱指针事件：hook 只用按钮/指针 id/主指针标记。 */
 function pointerEvent(options: { button?: number, isPrimary?: boolean, pointerId?: number } = {}): ReactPointerEvent<HTMLDivElement> {
@@ -149,7 +159,7 @@ afterEach(() => {
 
 describe('useWindowDraggable', () => {
   it('门槛内不移动窗口：位移不足时按单击处理', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     emitCursor(CURSOR.x, CURSOR.y)
     await press(result.current)
@@ -161,10 +171,11 @@ describe('useWindowDraggable', () => {
 
     release(result.current)
     expect(invokeMock).not.toHaveBeenCalledWith('move_pet_window', expect.anything())
+    expect(invokeMock).not.toHaveBeenCalledWith('persist_pet_window_position')
   })
 
   it('越门槛后进入拖拽态，窗口从原位起步缓慢追光标（第 1 帧只走一小段）', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 40)
     expect(result.current.dragging).toBe(true)
@@ -178,7 +189,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('窗口最终收敛到光标处：不会滞留在指针后面', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 40, 15)
     frames(60)
@@ -187,7 +198,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('弹簧追的是绝对位置：门槛前丢掉的位移会在越过门槛后补上', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     emitCursor(CURSOR.x, CURSOR.y)
     await press(result.current)
@@ -203,7 +214,7 @@ describe('useWindowDraggable', () => {
 
   it('手势门槛按 devicePixelRatio 换算成物理像素', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     emitCursor(CURSOR.x, CURSOR.y)
     await press(result.current)
@@ -216,7 +227,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('方向按相邻样本的水平位移判定，拖拽停顿时归零', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     // 越过门槛的那一帧没有上一个样本，方向先不判定（与上游轨迹语义一致）。
@@ -239,7 +250,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('pointerup 收尾，且只认同一个 pointerId', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     expect(result.current.dragging).toBe(true)
@@ -252,17 +263,59 @@ describe('useWindowDraggable', () => {
     expect(result.current.direction).toBeUndefined()
   })
 
-  it('收尾时让后端夹回可见显示器并持久化位置', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+  it('收尾时只持久化位置：整窗夹取会把贴边宠物推开', async () => {
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     release(result.current)
 
-    expect(invokeMock).toHaveBeenCalledWith('move_pet_window', { deltaX: 0, deltaY: 0 })
+    expect(invokeMock).toHaveBeenCalledWith('persist_pet_window_position')
+    // 不再走整窗夹取：宠物四周的透明留白会被算进去，贴边松手时把宠物推开一段。
+    expect(invokeMock).not.toHaveBeenCalledWith('move_pet_window', expect.anything())
+  })
+
+  it('每帧按 clampPosition 夹取：顶到边界就停住，越界位移不会攒起来', async () => {
+    const bound = { x: BASE.x + 30, y: BASE.y + 10 }
+    const clampPosition = vi.fn((position: { x: number, y: number }): { x: number, y: number } => ({
+      x: Math.min(position.x, bound.x),
+      y: Math.min(position.y, bound.y),
+    }))
+    const { result } = renderHook(() => useDraggable({ clampPosition }))
+
+    // 光标一路推到边界外 200px：弹簧被夹在边界上，而不是先跟到光标再回弹。
+    await startDrag(result.current, 200, 60)
+    frames(60)
+
+    expect(clampPosition).toHaveBeenCalled()
+    expect(lastPosition()).toEqual(bound)
+    expect(windowMock.setPosition.mock.calls.every(([position]) => position.x <= bound.x && position.y <= bound.y)).toBe(true)
+
+    // 松手后停在边缘：收尾不再有第二次「夹回屏幕内」的移动。
+    release(result.current)
+    expect(lastPosition()).toEqual(bound)
+  })
+
+  it('每个手势只报一次松开：pointerup 与设备流重复上报不会重复结算', async () => {
+    const onRelease = vi.fn()
+    const { result } = renderHook(() => useDraggable({ onRelease }))
+
+    // 单击（没过门槛）同样要报：抓取时物理层已进入「按住」，松手必须清掉。
+    await press(result.current)
+    release(result.current)
+    expect(onRelease).toHaveBeenCalledTimes(1)
+
+    // 同一次松开的设备流上报随后到达：不该再结算一遍。
+    emitButton(false)
+    expect(onRelease).toHaveBeenCalledTimes(1)
+
+    // 下一次手势照常只报一次（这次由设备流收尾）。
+    await startDrag(result.current, 12)
+    emitButton(false)
+    expect(onRelease).toHaveBeenCalledTimes(2)
   })
 
   it('后端设备流报告松开时立即收尾，不等停歇阈值', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     expect(result.current.dragging).toBe(true)
@@ -274,7 +327,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('设备流确认仍按住时，停歇超时不结束拖拽（按住不动再拖不会被误杀）', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     emitButton(true)
@@ -290,7 +343,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('设备流失联时仍由停歇阈值兜底收尾（丢 pointerup 不会永久粘住）', async () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 12)
     expect(result.current.dragging).toBe(true)
@@ -300,11 +353,11 @@ describe('useWindowDraggable', () => {
     })
 
     expect(result.current.dragging).toBe(false)
-    expect(invokeMock).toHaveBeenCalledWith('move_pet_window', { deltaX: 0, deltaY: 0 })
+    expect(invokeMock).toHaveBeenCalledWith('persist_pet_window_position')
   })
 
   it('只认左键：右键按下不开启会话、不移动窗口', () => {
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     act(() => {
       result.current.onPointerDown(pointerEvent({ button: 2 }))
@@ -318,7 +371,7 @@ describe('useWindowDraggable', () => {
 
   it('命中箱左键按下即通知抓取（不等手势门槛）；右键/非主指针/重复按下都不通知', () => {
     const onGrab = vi.fn()
-    const { result } = renderHook(() => useWindowDraggable({ onGrab }))
+    const { result } = renderHook(() => useDraggable({ onGrab }))
 
     act(() => {
       result.current.onPointerDown(pointerEvent({ button: 2 }))
@@ -347,7 +400,7 @@ describe('useWindowDraggable', () => {
 
   it('读不到窗口原位时放弃这次手势，窗口保持不动', async () => {
     windowMock.outerPosition.mockRejectedValue(new Error('window unavailable'))
-    const { result } = renderHook(() => useWindowDraggable())
+    const { result } = renderHook(() => useDraggable())
 
     await startDrag(result.current, 40)
     frames(4)
@@ -357,7 +410,7 @@ describe('useWindowDraggable', () => {
   })
 
   it('挂载时拉起后端鼠标设备流', () => {
-    renderHook(() => useWindowDraggable())
+    renderHook(() => useDraggable())
 
     expect(invokeMock).toHaveBeenCalledWith('start_pet_mouse_stream')
   })

@@ -143,6 +143,49 @@ describe('usePetPhysics', () => {
     expect(pet.fling).toHaveBeenCalledTimes(1)
   })
 
+  it('宿主转来的命中箱松开结算一次甩动，设备流的同一次松开不再重复结算', () => {
+    const pet = createPet()
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+
+    grab(result.current)
+    dragWindow(clock, [
+      { t: 0, x: 1000, y: 500 },
+      { t: 40, x: 1200, y: 500 },
+      { t: 80, x: 1400, y: 500 },
+      { t: 120, x: 1600, y: 500 },
+    ])
+    clock.now = 121
+    act(() => {
+      result.current.onRelease()
+    })
+
+    expect(pet.fling).toHaveBeenCalledTimes(1)
+
+    // 设备流的同一次松开随后到达：`pressedRef` 已清，不再结算（也就不会用陈旧轨迹甩出去）。
+    clock.now = 130
+    pressMouse(false)
+    act(() => {
+      result.current.onRelease()
+    })
+    expect(pet.fling).toHaveBeenCalledTimes(1)
+  })
+
+  it('没有抓取时的松开是空操作：清状态不会凭空甩出宠物', () => {
+    const pet = createPet()
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+
+    dragWindow(clock, [
+      { t: 0, x: 1000, y: 500 },
+      { t: 40, x: 1600, y: 500 },
+    ])
+    act(() => {
+      result.current.onRelease()
+    })
+    pressMouse(false)
+
+    expect(pet.fling).not.toHaveBeenCalled()
+  })
+
   it('窗口几乎没动（低于 500 CSS px/s）的松手不甩', () => {
     const pet = createPet()
     const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))

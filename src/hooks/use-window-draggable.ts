@@ -36,8 +36,19 @@ export interface UseWindowDraggableResult {
   onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void
 }
 
-/** 拖拽钩子的可选回调。 */
+/** 拖拽钩子的夹取与回调。 */
 export interface UseWindowDraggableOptions {
+  /**
+   * 每帧把弹簧算出的窗口位置夹进可见区域（物理像素，与窗口 `outerPosition()` 同一
+   * 坐标系），返回夹取后的位置。
+   *
+   * 等价于上游 playground `usePetDrag` 的 `getBounds`：上游在弹簧循环里就把盒子夹进
+   * 舞台，因此「按在边界不放」不会在弹簧里攒下越界位移、松手后突然弹出去。这里同样在
+   * 积分之后、下发 `setPosition` 之前调用。边界必须与飞行共用（桌宠用
+   * `src/pet/hooks/use-pet-window-clamp.ts`，边界取自 `bodyBounds` 的宠物本体/脚底），
+   * 否则贴边松手会被飞行的越界修正弹回来。
+   */
+  clampPosition: (position: { x: number, y: number }) => { x: number, y: number }
   /**
    * 命中箱上按下左键（真正「抓住宠物」）时触发，早于读窗口位置的异步调用；右键、
    * 非主指针、以及已有手势进行中的按下都不会触发。
@@ -46,6 +57,15 @@ export interface UseWindowDraggableOptions {
    * 分不清「抓住宠物」与「在别处点击」（见 `src/pet/hooks/use-pet-physics.ts`）。
    */
   onGrab?: () => void
+  /**
+   * 手势结束时触发一次（含没有位移的单击、以及设备流/兜底计时结束的那一次），宿主用它
+   * 结算甩动并清掉「按住」状态。
+   *
+   * 后端 `device-mouse-button` 只是 OS 侧的兜底信号，可能丢事件；命中箱的 `pointerup`
+   * 更早也更可靠。两条路都汇到这里，同一个手势重复结束只报一次（见
+   * `src/pet/hooks/use-pet-physics.ts` 的 `onRelease`）。
+   */
+  onRelease?: () => void
 }
 
 /**
@@ -118,21 +138,46 @@ interface Gesture {
  * 若把它当作结束，窗口就会定格在半路（正是要修的「滞留在后面」）。收尾兜底是
  * `DRAG_SESSION_TIMEOUT`，且设备流确认仍按住时只重新计时，不误杀「按住不动再拖」。
  *
+ * # 跟手期间的夹取
+ *
+ * 每帧夹一次（`clampPosition`，上游 `getBounds` 的等价物）：位置一旦贴到可见区域边界
+ * 就不再越界累积，光标继续往外推也只是让弹簧顶在边界上，松手时宠物正好停在边缘 ——
+ * 「左右上边缘松开就被弹开」的另一半原因（跟手期间窗口跑到飞行边界之外，松手后飞行
+ * 积分把越界位置一次性修正回来）由此消除。
+ *
  * # 收尾写回
  *
  * 跟手期间每帧直接 `setPosition`（与飞行同一套做法，绝对定位不会累积漂移）；
- * 结束时用 `move_pet_window(0, 0)` 让后端把窗口夹回可见显示器并持久化最终位置。
+ * 结束时只调 `persist_pet_window_position` 把当前位置落盘，**不再**走
+ * `move_pet_window(0, 0)`：后者夹的是整个窗口，而宠物只是窗口底部居中的一块，四周
+ * 是透明留白（`PET_WINDOW_PAD_X` / 窗口最小宽度），贴边松手的瞬间会把宠物从边缘推开
+ * 一段（100% 大小时左侧约 100 物理像素，即「没办法在边缘放置宠物」）。
+ * 位置合法性由前端每帧的 `clampPosition` 保证，后端不必再夹一遍。
  *
  * # 抓取回调（`onGrab`）
  *
  * 命中箱上的左键按下同时是「抓住宠物」的语义信号，宿主靠它给甩出中的宠物刹车
  * （见 `src/pet/hooks/use-pet-physics.ts`）。回调落在门槛之前：刹车要在按下的那一刻
  * 发生，而跟手本身要等 5px 门槛；也因此在「按下不动」的单击里同样会触发。
+ *
+ * # 松开回调（`onRelease`）
+ *
+ * 每个手势（含没有位移的单击）结束时通知一次，物理层靠它结算甩动并清掉「按住」状态
+ * （见 `src/pet/hooks/use-pet-physics.ts` 的 `onRelease`）。不只依赖后端设备流的原因：
+ * 设备流可能丢事件，一旦丢了，物理层会一直以为按钮还按着，把很久以后一次无关点击当成
+ * 甩出；命中箱 `pointerup` 更早也更可靠，于是两条路都汇进同一个幂等结算。手势对象在
+ * `endDrag()` 里已被清空，因此「设备流松手 + `pointerup`」只会报一次。
  */
-export function useWindowDraggable(options: UseWindowDraggableOptions = {}): UseWindowDraggableResult {
+export function useWindowDraggable(options: UseWindowDraggableOptions): UseWindowDraggableResult {
   // 回调走 ref：拖拽期间每帧重渲染，闭包里的旧回调会把信号落到过期实例上。
   const onGrabRef = useRef(options.onGrab)
   onGrabRef.current = options.onGrab
+  // 松开同样走 ref：拖拽期间每帧重渲染，闭包里的旧回调会把信号落到过期实例上。
+  const onReleaseRef = useRef(options.onRelease)
+  onReleaseRef.current = options.onRelease
+  // 夹取同样走 ref：拖拽期间每帧重渲染，闭包可能抓到过期的 `pet.geometry` 快照。
+  const clampRef = useRef(options.clampPosition)
+  clampRef.current = options.clampPosition
   const gestureRef = useRef<Gesture | null>(null)
   /** 后端设备流最近一次上报的光标位置。 */
   const cursorRef = useRef<{ x: number, y: number } | undefined>(undefined)
@@ -186,6 +231,11 @@ export function useWindowDraggable(options: UseWindowDraggableOptions = {}): Use
       gesture.y += gesture.vy * dt
       remaining -= dt
     }
+    // 先夹取再取整（见 `clampPosition`）：把弹簧状态本身限制在可见区域内，
+    // 越界位移不会攒起来在松手后弹出去（上游同样在弹簧循环里夹盒子）。
+    const clamped = clampRef.current({ x: gesture.x, y: gesture.y })
+    gesture.x = clamped.x
+    gesture.y = clamped.y
     // 窗口位置取整：亚像素位置在 Windows 上会被系统四舍五入，抖动比丢精度更显眼。
     const nextX = Math.round(gesture.x)
     const nextY = Math.round(gesture.y)
@@ -222,10 +272,14 @@ export function useWindowDraggable(options: UseWindowDraggableOptions = {}): Use
     rafRef.current?.pause()
     setDragging(false)
     setDirection(undefined)
+    if (gesture !== null) {
+      // 每个手势只报一次松开：物理层据此结算甩动并清掉「按住」状态（见 hook 文档）。
+      onReleaseRef.current?.()
+    }
     if (gesture?.engaged === true) {
-      // 收尾交给后端：`move_pet_window(0, 0)` 按当前真实位置夹回可见显示器并持久化，
-      // 前端不用自己算夹取（拖到屏幕外松手也能被拉回来）。
-      void invoke('move_pet_window', { deltaX: 0, deltaY: 0 }).catch(() => {})
+      // 只落盘、不夹取：位置已由每帧的 `clampPosition` 保证在可见区域内，整窗夹取
+      // 反而会把贴边松手的宠物推开一段（见 hook 文档「收尾写回」）。
+      void invoke('persist_pet_window_position').catch(() => {})
     }
   }
 
