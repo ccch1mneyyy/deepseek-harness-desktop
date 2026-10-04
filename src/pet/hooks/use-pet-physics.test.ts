@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { PetPhysicsEvent, PetRef } from 'dsh-pet-component'
+import type { PetPhysicsControls } from './use-pet-physics'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePetPhysics } from './use-pet-physics'
@@ -71,6 +72,13 @@ function pressMouse(pressed: boolean): void {
   })
 }
 
+/** 抓住宠物：命中箱上的左键按下（`useWindowDraggable({ onGrab })` 转来的信号）。 */
+function grab(controls: PetPhysicsControls): void {
+  act(() => {
+    controls.onGrab()
+  })
+}
+
 /** 投喂窗口 Moved：`clock` 控制采样时刻，采样值 = 物理像素 / dpr。 */
 function dragWindow(clock: { now: number }, samples: Array<{ t: number, x: number, y: number }>): void {
   for (const sample of samples) {
@@ -110,11 +118,11 @@ describe('usePetPhysics', () => {
     vi.restoreAllMocks()
   })
 
-  it('松开左键时按窗口轨迹估速并请求组件甩出，轨迹随下一次抓取清空', () => {
+  it('抓住宠物后松开左键，按窗口轨迹估速并请求组件甩出，轨迹随下一次抓取清空', () => {
     const pet = createPet()
-    renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
 
-    pressMouse(true)
+    grab(result.current)
     dragWindow(clock, [
       { t: 0, x: 1000, y: 500 },
       { t: 40, x: 1200, y: 500 },
@@ -129,7 +137,7 @@ describe('usePetPhysics', () => {
     expect(velocity.vx).toBeGreaterThan(0)
     expect(velocity.vy).toBeCloseTo(0, 6)
 
-    pressMouse(true)
+    grab(result.current)
     clock.now = 400
     pressMouse(false)
     expect(pet.fling).toHaveBeenCalledTimes(1)
@@ -137,9 +145,9 @@ describe('usePetPhysics', () => {
 
   it('窗口几乎没动（低于 500 CSS px/s）的松手不甩', () => {
     const pet = createPet()
-    renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
 
-    pressMouse(true)
+    grab(result.current)
     dragWindow(clock, [
       { t: 0, x: 1000, y: 500 },
       { t: 100, x: 1010, y: 500 },
@@ -155,7 +163,7 @@ describe('usePetPhysics', () => {
     const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
 
     act(() => {
-      result.current(flingEvent(600, 0))
+      result.current.onFling(flingEvent(600, 0))
     })
     await act(async () => {})
 
@@ -173,18 +181,39 @@ describe('usePetPhysics', () => {
     expect(Math.max(...positions.map(position => position.y))).toBeLessThanOrEqual(980)
   })
 
-  it('飞行中按下左键立刻停住窗口（抓取刹车，不等落地）', async () => {
+  it('飞行中在别处点击（全屏左键按下）不停窗口，也不会被当成甩动', async () => {
     const pet = createPet()
     const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
 
     act(() => {
-      result.current(flingEvent(600, 0))
+      result.current.onFling(flingEvent(600, 0))
     })
     await act(async () => {})
     advanceFrames(2)
 
     const calls = mocks.window.setPosition.mock.calls.length
     pressMouse(true)
+    advanceFrames(10)
+
+    // 全屏左键流分不清「抓宠物」与「在别处点击」：飞行必须继续。
+    expect(mocks.window.setPosition.mock.calls.length).toBeGreaterThan(calls)
+
+    pressMouse(false)
+    expect(pet.fling).not.toHaveBeenCalled()
+  })
+
+  it('抓住宠物（命中箱按下）立刻停住飞行，不等落地', async () => {
+    const pet = createPet()
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+
+    act(() => {
+      result.current.onFling(flingEvent(600, 0))
+    })
+    await act(async () => {})
+    advanceFrames(2)
+
+    const calls = mocks.window.setPosition.mock.calls.length
+    grab(result.current)
     advanceFrames(10)
 
     expect(mocks.window.setPosition).toHaveBeenCalledTimes(calls)

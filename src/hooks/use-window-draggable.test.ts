@@ -316,6 +316,35 @@ describe('useWindowDraggable', () => {
     expect(windowMock.setPosition).not.toHaveBeenCalled()
   })
 
+  it('命中箱左键按下即通知抓取（不等手势门槛）；右键/非主指针/重复按下都不通知', () => {
+    const onGrab = vi.fn()
+    const { result } = renderHook(() => useWindowDraggable({ onGrab }))
+
+    act(() => {
+      result.current.onPointerDown(pointerEvent({ button: 2 }))
+      result.current.onPointerDown(pointerEvent({ isPrimary: false }))
+    })
+    expect(onGrab).not.toHaveBeenCalled()
+
+    // 门槛前就通知：抓取刹车要发生在按下的那一刻，跟手才等 5px。
+    act(() => {
+      result.current.onPointerDown(pointerEvent())
+    })
+    expect(onGrab).toHaveBeenCalledTimes(1)
+
+    // 手势进行中的第二次按下不再重复通知宿主。
+    act(() => {
+      result.current.onPointerDown(pointerEvent({ pointerId: 2 }))
+    })
+    expect(onGrab).toHaveBeenCalledTimes(1)
+
+    release(result.current)
+    act(() => {
+      result.current.onPointerDown(pointerEvent({ pointerId: 3 }))
+    })
+    expect(onGrab).toHaveBeenCalledTimes(2)
+  })
+
   it('读不到窗口原位时放弃这次手势，窗口保持不动', async () => {
     windowMock.outerPosition.mockRejectedValue(new Error('window unavailable'))
     const { result } = renderHook(() => useWindowDraggable())

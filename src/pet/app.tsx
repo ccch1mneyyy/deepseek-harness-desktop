@@ -22,14 +22,16 @@ export function App() {
   const activedPet = status?.active_pet ?? ''
   const { source, error } = usePetSource(activedPet)
   const hitboxRef = useRef<HTMLDivElement>(null)
-  const draggable = useWindowDraggable()
+  // 甩动：松手后按窗口轨迹估速请求组件甩出，飞行积分与落地 Q 弹都在宿主（见 hook 文档）。
+  // 抓取信号来自命中箱 `pointerdown`（经拖拽 hook 的 `onGrab`）：`device-mouse-button`
+  // 是全屏左键流，在桌面别处的点击不能给甩出中的宠物刹车。
+  const { onFling, onGrab } = usePetPhysics(pet, source?.kind)
+  const draggable = useWindowDraggable({ onGrab })
 
   const visible = status === null || (status.enabled !== false && status.visible !== false)
   const width = (source?.width ?? PET_BASE_WIDTH) * normalizeSizePercent(status?.pet_size) / 100
 
   useBubbleTracker(pet, source)
-  // 甩动：松手后按窗口轨迹估速请求组件甩出，飞行积分与落地 Q 弹都在宿主（见 hook 文档）。
-  const onFling = usePetPhysics(pet, source?.kind)
   usePetWindowSize(width, source?.aspect ?? PET_DSH_ASPECT, visible)
   useOmitIgnoreCursorEvents(hitboxRef, draggable.dragging)
   useEventListener('contextmenu', event => event.preventDefault())

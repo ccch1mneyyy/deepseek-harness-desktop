@@ -43,6 +43,12 @@ interface RustPetStatus {
  * 后面，光标一出框就会被判成穿透 —— 那次拖拽的松手会落到桌面（别的窗口）上，指针
  * 事件也随之中断。因此拖拽期间固定 `ignore = false`，并在 `dragging` 翻回 false 时
  * 立刻按最近一次光标样本重算，不用等下一个样本。
+ *
+ * # 命中判定跟着窗口自己动
+ *
+ * 宠物甩出时是窗口在动、光标不动（`device-mouse-move` 只在光标真的移动时才来），
+ * 因此窗口 `Moved` 之后也要按最近光标样本重算一次：宠物飞离指针就切回穿透，飞到
+ * 指针下方就恢复可交互，点击落在「宠物现在的位置」上。
  */
 export function useOmitIgnoreCursorEvents(elementRef: RefObject<HTMLElement | null>, dragging = false): void {
   /** 拖拽态最新值：主 effect 只挂一次，事件回调与重算入口都按 ref 读取。 */
@@ -155,7 +161,10 @@ export function useOmitIgnoreCursorEvents(elementRef: RefObject<HTMLElement | nu
     }).catch(() => {})
 
     const movedPromise = appWindow.onMoved(() => {
-      void refreshWindowPosition()
+      // 命中判定同时依赖「窗口在哪」与「最近光标样本」，而甩出时是窗口在动、光标不动
+      // （`device-mouse-move` 不会再来）：位置读回来后立刻按最近样本重算，宠物飞离指针
+      // 就切回穿透、飞到指针下方就恢复可交互，点击落在「宠物现在在哪」上。
+      void refreshWindowPosition().then(refreshFromState).catch(() => {})
     })
     const resizedPromise = appWindow.onResized(() => {
       void refreshWindowPosition()

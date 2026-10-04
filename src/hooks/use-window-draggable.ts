@@ -36,6 +36,18 @@ export interface UseWindowDraggableResult {
   onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void
 }
 
+/** 拖拽钩子的可选回调。 */
+export interface UseWindowDraggableOptions {
+  /**
+   * 命中箱上按下左键（真正「抓住宠物」）时触发，早于读窗口位置的异步调用；右键、
+   * 非主指针、以及已有手势进行中的按下都不会触发。
+   *
+   * 宿主用它做「抓取刹车」这类动作：后端 `device-mouse-button` 是**全屏**左键流，
+   * 分不清「抓住宠物」与「在别处点击」（见 `src/pet/hooks/use-pet-physics.ts`）。
+   */
+  onGrab?: () => void
+}
+
 /**
  * 手势门槛（CSS px）：与上游 playground `usePetDrag` 的 `Math.hypot(dx, dy) < 5` 一致，
  * 门槛内按单击处理（组件的挤压反馈）。换算成物理像素时乘 `devicePixelRatio`。
@@ -110,8 +122,17 @@ interface Gesture {
  *
  * 跟手期间每帧直接 `setPosition`（与飞行同一套做法，绝对定位不会累积漂移）；
  * 结束时用 `move_pet_window(0, 0)` 让后端把窗口夹回可见显示器并持久化最终位置。
+ *
+ * # 抓取回调（`onGrab`）
+ *
+ * 命中箱上的左键按下同时是「抓住宠物」的语义信号，宿主靠它给甩出中的宠物刹车
+ * （见 `src/pet/hooks/use-pet-physics.ts`）。回调落在门槛之前：刹车要在按下的那一刻
+ * 发生，而跟手本身要等 5px 门槛；也因此在「按下不动」的单击里同样会触发。
  */
-export function useWindowDraggable(): UseWindowDraggableResult {
+export function useWindowDraggable(options: UseWindowDraggableOptions = {}): UseWindowDraggableResult {
+  // 回调走 ref：拖拽期间每帧重渲染，闭包里的旧回调会把信号落到过期实例上。
+  const onGrabRef = useRef(options.onGrab)
+  onGrabRef.current = options.onGrab
   const gestureRef = useRef<Gesture | null>(null)
   /** 后端设备流最近一次上报的光标位置。 */
   const cursorRef = useRef<{ x: number, y: number } | undefined>(undefined)
@@ -211,6 +232,8 @@ export function useWindowDraggable(): UseWindowDraggableResult {
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (event.button !== 0 || event.isPrimary === false || gestureRef.current !== null)
       return
+    // 先通知宿主「抓住宠物」：这一步早于手势门槛与异步读窗口位置。
+    onGrabRef.current?.()
     const latest = cursorRef.current
     const gesture: Gesture = {
       pointerId: event.pointerId,
