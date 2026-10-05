@@ -77,7 +77,6 @@ export function ConfigPlugin() {
   const managedPlugins = plugins.filter(plugin => !plugin.internal)
 
   const [showInternal, toggleShowInternal] = useToggle()
-  /** 高级选项：默认关闭，快照（创建/还原/删除）属于低频维护操作，不常驻每行 */
   const [advanced, toggleAdvanced] = useToggle()
   /** 行内动作标记 `<id>:<action>`：按行独立，某行的动作不阻塞其他行继续入队 */
   const [busy, setBusy] = useState<string[]>([])
@@ -86,6 +85,8 @@ export function ConfigPlugin() {
   const [installing, setInstalling] = useState(false)
   /** 兼容性预检结果：安装前先经 manager.search 展示解析到的版本与兼容性 */
   const [searchResults, setSearchResults] = useState<PluginSearchResult[] | null>(null)
+  const [upgradingAll, setUpgradingAll] = useState(false)
+  const upgradable = managedPlugins.filter(plugin => (plugin.updateAvailable || plugin.error != null) && !rowBusy(plugin.id))
 
   const [dialogHolder, openDialog] = useOverlay(Modal, { type: 'holder' })
 
@@ -231,6 +232,28 @@ export function ConfigPlugin() {
     // 并在来源被钉死时用显式安装兜底（见 `update_dsh_plugins`）。
     const ref = latest === null ? id : { spec: id, version: latest }
     await runAction(id, 'update', () => manager.upgrade(ref))
+  }
+
+  async function onUpgradeAll() {
+    if (upgradingAll || upgradable.length === 0)
+      return
+    setUpgradingAll(true)
+    const targets = upgradable
+    for (const plugin of targets)
+      markBusy(plugin.id, 'update')
+    try {
+      await manager.upgrade(targets.map(plugin => (
+        plugin.latest === null ? plugin.id : { spec: plugin.id, version: plugin.latest }
+      )))
+    }
+    catch (e) {
+      silence(e, 'plugin upgrade all: error already reported by the manager')
+    }
+    finally {
+      for (const plugin of targets)
+        clearBusy(plugin.id, 'update')
+      setUpgradingAll(false)
+    }
   }
 
   async function onRemove(id: string, name: string) {
@@ -648,6 +671,28 @@ export function ConfigPlugin() {
                 <p>{t('preinstall.settings_hint')}</p>
               </Tooltip.Content>
             </Tooltip>
+            <Tooltip delay={0}>
+              <Button
+                size="sm"
+                variant="tertiary"
+                onPress={() => void onUpgradeAll()}
+                isDisabled={upgradingAll || upgradable.length === 0}
+              >
+                <span className="flex items-center gap-1">
+                  <If cond={upgradingAll} then={<Spinner size="sm" color="current" />} />
+                  {t('plugins.upgrade_all')}
+                </span>
+              </Button>
+              <Tooltip.Content>
+                <p>
+                  <If
+                    cond={upgradable.length > 0}
+                    then={t('plugins.upgrade_all_hint', { count: upgradable.length })}
+                    else={t('plugins.upgrade_all_empty')}
+                  />
+                </p>
+              </Tooltip.Content>
+            </Tooltip>
           </div>
         )}
         description={t('plugins.panel_tooltip')}
@@ -725,28 +770,30 @@ export function ConfigPlugin() {
             </If>
           </div>
 
-          <div className="flex flex-col gap-1 px-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-ink">{t('plugins.hmr')}</span>
-              <Switch
-                size="sm"
-                isSelected={hmr.data?.enabled ?? false}
-                isDisabled={hmr.isFetching || setHmr.isPending}
-                onChange={enabled => setHmr.mutate(enabled)}
-                aria-label={t('plugins.hmr')}
-              >
-                <Switch.Content>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                </Switch.Content>
-              </Switch>
+          <If cond={advanced}>
+            <div className="flex flex-col gap-1 px-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-ink">{t('plugins.hmr')}</span>
+                <Switch
+                  size="sm"
+                  isSelected={hmr.data?.enabled ?? false}
+                  isDisabled={hmr.isFetching || setHmr.isPending}
+                  onChange={enabled => setHmr.mutate(enabled)}
+                  aria-label={t('plugins.hmr')}
+                >
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                  </Switch.Content>
+                </Switch>
+              </div>
+              <Description className="text-[10px] text-muted/70">{t('plugins.hmr_hint')}</Description>
+              <If cond={hmr.data != null && !hmr.data.watching}>
+                <Description className="text-[10px] text-warning">{t('plugins.hmr_idle')}</Description>
+              </If>
             </div>
-            <Description className="text-[10px] text-muted/70">{t('plugins.hmr_hint')}</Description>
-            <If cond={hmr.data != null && !hmr.data.watching}>
-              <Description className="text-[10px] text-warning">{t('plugins.hmr_idle')}</Description>
-            </If>
-          </div>
+          </If>
 
           <If cond={managedPlugins.length > 0} else={<Empty>{t('plugins.empty')}</Empty>}>
             {managedPlugins.map(plugin => renderPluginRow(plugin))}
