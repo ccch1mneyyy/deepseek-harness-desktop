@@ -33,6 +33,21 @@ describe('mobile conversation layout', () => {
     }
   })
 
+  it('keeps the extension panel’s embedded official page head out of the main-slot clearance', () => {
+    const matches: Array<{ selector: string, paddingTop: string }> = []
+    root.walkRules(/header\[class\*="_pageHead"\]/, (rule) => {
+      let paddingTop = ''
+      rule.walkDecls('padding-top', (decl) => {
+        paddingTop = `${decl.value}${decl.important ? ' !important' : ''}`
+      })
+      matches.push({ selector: rule.selector, paddingTop })
+    })
+    expect(matches).toEqual([{
+      selector: '[data-slot="main"] header[class*="_pageHead"]:not([data-dsh-extension-plugins] *)',
+      paddingTop: '24px !important',
+    }])
+  })
+
   it('positions the drawer without relying on the upstream collapsed marker', () => {
     const css = root.toString()
     for (const selector of [
@@ -49,16 +64,17 @@ describe('mobile conversation layout', () => {
     expect(css).not.toContain('[data-sidebar-collapsed]')
   })
 
-  it('keeps the sidebar stationary behind a raised rounded main panel without a gray shade', () => {
-    const declarations = (selector: string): Record<string, string> => {
-      const values: Record<string, string> = {}
-      root.walkRules(selector, (rule) => {
-        rule.walkDecls((decl) => {
-          values[decl.prop] = `${decl.value}${decl.important ? ' !important' : ''}`
-        })
+  const declarations = (selector: string): Record<string, string> => {
+    const values: Record<string, string> = {}
+    root.walkRules(selector, (rule) => {
+      rule.walkDecls((decl) => {
+        values[decl.prop] = `${decl.value}${decl.important ? ' !important' : ''}`
       })
-      return values
-    }
+    })
+    return values
+  }
+
+  it('keeps the sidebar stationary behind a raised rounded main panel without a gray shade', () => {
     expect(declarations('html[data-dsh-mobile-sidebar] [class$="_sidebarCol"]')).toMatchObject({
       'z-index': '0',
       'transform': 'none',
@@ -88,12 +104,41 @@ describe('mobile conversation layout', () => {
       position: 'sticky',
       top: '0',
     })
-    expect(declarations('[data-dsh-mobile-sidebar-toggle]')).toMatchObject({
-      'width': '24px',
-      'height': '24px',
-      'background': 'transparent',
-      'box-shadow': 'none',
+  })
+
+  it('keeps the navbar controls as naked icons without button backgrounds or shadows', () => {
+    for (const selector of ['[data-dsh-mobile-sidebar-toggle]', '[data-dsh-mobile-new-session]']) {
+      expect(declarations(selector)).toMatchObject({
+        'padding': '0',
+        'border': '0',
+        'background': 'transparent',
+        'box-shadow': 'none',
+      })
+    }
+  })
+
+  it('renders the mobile sidebar icon at 20px inside the touch media query', () => {
+    expect(declarations('[data-dsh-mobile-sidebar-toggle]')).toMatchObject({ width: '20px', height: '20px' })
+    const rules: unknown[] = []
+    root.walkRules('[data-dsh-mobile-sidebar-toggle]', (rule) => {
+      rules.push(rule)
+      expect(rule.parent?.type).toBe('atrule')
+      if (rule.parent?.type === 'atrule')
+        expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
     })
+    expect(rules).toHaveLength(1)
+  })
+
+  it('keeps the new-session icon at 24px', () => {
+    expect(declarations('[data-dsh-mobile-new-session]')).toMatchObject({ width: '24px', height: '24px' })
+    const rules: unknown[] = []
+    root.walkRules('[data-dsh-mobile-new-session]', (rule) => {
+      rules.push(rule)
+      expect(rule.parent?.type).toBe('atrule')
+      if (rule.parent?.type === 'atrule')
+        expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
+    })
+    expect(rules).toHaveLength(1)
   })
 
   it('overrides conversation scroll bottom padding to zero inside the mobile media query', () => {

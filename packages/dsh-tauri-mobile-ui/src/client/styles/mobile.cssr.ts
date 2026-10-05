@@ -28,7 +28,9 @@ export default c(`@media ${MOBILE_MEDIA_QUERIES.join(' and ')}`, [
   c('[data-slot="conversation.header"] [class$="_header"]', {
     display: 'none !important',
   }),
-  c('[data-slot="main"] header[class*="_pageHead"]', {
+  // 扩展面板内嵌的官方页头由 dsh-tauri-extension 自己排版（同一行左侧还有它叠放的闪光图标），
+  // 这里叠加顶距会把标题压低、与图标错轴，因此只给主槽里独立成页的页头让位。
+  c('[data-slot="main"] header[class*="_pageHead"]:not([data-dsh-extension-plugins] *)', {
     paddingLeft: '0 !important',
     paddingTop: '24px !important',
   }),
@@ -133,8 +135,8 @@ export default c(`@media ${MOBILE_MEDIA_QUERIES.join(' and ')}`, [
   }),
   c('[data-dsh-mobile-sidebar-toggle]', {
     display: 'block',
-    width: '24px',
-    height: '24px',
+    width: '20px',
+    height: '20px',
     padding: '0',
     border: '0',
     color: 'var(--dsw-alias-label-primary)',
