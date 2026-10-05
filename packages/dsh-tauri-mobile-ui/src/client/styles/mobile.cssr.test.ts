@@ -33,6 +33,21 @@ describe('mobile conversation layout', () => {
     }
   })
 
+  it('keeps the extension panel’s embedded official page head out of the main-slot clearance', () => {
+    const matches: Array<{ selector: string, paddingTop: string }> = []
+    root.walkRules(/header\[class\*="_pageHead"\]/, (rule) => {
+      let paddingTop = ''
+      rule.walkDecls('padding-top', (decl) => {
+        paddingTop = `${decl.value}${decl.important ? ' !important' : ''}`
+      })
+      matches.push({ selector: rule.selector, paddingTop })
+    })
+    expect(matches).toEqual([{
+      selector: '[data-slot="main"] header[class*="_pageHead"]:not([data-dsh-extension-plugins] *)',
+      paddingTop: '24px !important',
+    }])
+  })
+
   it('positions the drawer without relying on the upstream collapsed marker', () => {
     const css = root.toString()
     for (const selector of [

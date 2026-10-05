@@ -85,4 +85,55 @@ describe('extension panel official plugins composition', () => {
       await app.close()
     }
   })
+
+  it('keeps the embedded page head on the same axis as its icon on touch viewports', async () => {
+    const app = await newDshPage(browser, {
+      ready: '[data-dsh-hidden-panel="plugins"]',
+      viewport: { width: 399, height: 938 },
+      hasTouch: true,
+      isMobile: true,
+    })
+    try {
+      const toggle = app.frame.locator('[data-dsh-mobile-sidebar-toggle]')
+      if (await toggle.count() > 0)
+        await toggle.first().click()
+      await expect.poll(() => app.frame.locator('html[data-dsh-mobile-sidebar-open]').count()).toBe(1)
+      // 抽屉的偏移是逐帧驱动的，行本身永远不满足 playwright 的 stable 判定；这里用真实
+      // 指针点击打开抽屉，再用页内点击选中面板行，几何断言不受影响。
+      const panelRow = app.frame.getByRole('button', { name: '插件扩展', exact: true })
+      await panelRow.evaluate((el: HTMLElement) => {
+        el.click()
+      })
+      const officialPage = app.frame.locator('[data-dsh-extension-plugins] [data-plugin-panel]')
+      await officialPage.waitFor()
+      const geometry = await officialPage.evaluate((el) => {
+        const wrapper = el.closest('[data-dsh-extension-plugins]') as HTMLElement
+        const header = el.querySelector(':scope > header[data-window-drag]') as HTMLElement
+        const title = header.querySelector('h1') as HTMLElement
+        const icon = wrapper.querySelector('[data-dsh-plugins-icon]') as HTMLElement
+        const center = (node: Element): number => {
+          const rect = node.getBoundingClientRect()
+          return rect.top + rect.height / 2
+        }
+        return {
+          headerPaddingTop: getComputedStyle(header).paddingTop,
+          titleCenter: center(title),
+          iconCenter: center(icon),
+          titleLeft: title.getBoundingClientRect().left,
+          iconLeft: icon.getBoundingClientRect().left,
+          iconWidth: icon.getBoundingClientRect().width,
+          titlePaddingLeft: Number.parseFloat(getComputedStyle(title).paddingLeft),
+        }
+      })
+      expect(geometry.headerPaddingTop, '移动端页头不得叠加主槽的顶距').toBe('0px')
+      expect(Math.abs(geometry.iconCenter - geometry.titleCenter), '闪光图标必须与插件标题同轴').toBeLessThanOrEqual(1)
+      expect(geometry.iconLeft, '图标必须落在标题的左内边距内').toBeCloseTo(geometry.titleLeft, 1)
+      expect(geometry.iconWidth + 10, '图标盒加 10px 间距必须等于标题的 32px 缩进').toBeCloseTo(geometry.titlePaddingLeft, 1)
+      expectNoSyntheticFallbacks(app)
+      expect(app.errors, '移动端组合官方页面不得产生浏览器错误').toEqual([])
+    }
+    finally {
+      await app.close()
+    }
+  })
 })
