@@ -40,7 +40,7 @@
 
 - 🪶 **Native desktop** — Tauri 2 + React 19, embedding the local Harness web UI.
 - 🔄 **Runtime management** — Install dependencies, select core versions, and access desktop/core updates.
-- 🧩 **Plugin management** — 11 built-in plugins, plus community plugin installation, upgrades, removal, and error details.
+- 🧩 **Plugin management** — 12 built-in plugins, plus local-directory installs, built-in disabling, community plugin installation, upgrades, removal, and error details.
 - 🗂️ **Profile configuration** — Separate plugin/settings configurations; profiles are not an OS security sandbox.
 - 💽 **Data directory** — Pick where data lives during installation (Windows installer); migrate or roll it back later in Settings on Windows, macOS, and Linux.
 - ⌨️ **CLI integration** — Managed `dsh` / `pnpm` shims, not a global npm core installation.
@@ -49,14 +49,15 @@
 
 ## Built-in plugins
 
-The 11 first-party plugins distributed with desktop resources:
+The 12 first-party plugins distributed with desktop resources:
 
 | Plugin | Package | Purpose |
 | --- | --- | --- |
 | [DSH Tauri](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri) | `dsh-tauri` | Desktop shell / Harness communication |
 | [DSH Tauri UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-ui) | `dsh-tauri-ui` | Desktop settings UI |
+| [DSH Tauri Mobile UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-mobile-ui) | `dsh-tauri-mobile-ui` | Touch layouts and mobile preferences |
 | [DSH Tauri Worktree](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-worktree) | `dsh-tauri-worktree` | Session Git worktrees and checkout |
-| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | Skills, skill sources, and MCP management |
+| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | Official plugin manager, optional market, Skills, and MCP |
 | [DSH Tauri Scheduler](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-scheduler) | `dsh-tauri-scheduler` | Scheduled tasks and run history |
 | [DSH Tauri Archive](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-archive) | `dsh-tauri-archive` | Chat archiving and restoration |
 | [DSH Tauri Pet](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-pet) | `dsh-tauri-pet` | Pets and activity states |
@@ -99,13 +100,17 @@ brew install dsh-tauri/desktop/deepseek-harness
 ```
 
 - Standard installers need network on first launch to download missing runtime/core components. Git features require an available Git.
-- Use a `Bundle` only when that release actually publishes runtime/core assets in it. **v0.20.0-beta.1 has no Bundle assets**.
+- Use a `Bundle` only when that release actually publishes runtime/core assets in it. Stable `0.22.1` provides Bundle assets (`_Bundle_*.exe`, `_Bundle_*.deb`, and two `_Bundle_*.dmg`).
 - Local execution is not fully offline: model services, plugin installation, updates, and preset pet media can still use network.
 - For Linux display, Wayland, AppImage, and permission workarounds, see the [installation and troubleshooting docs](https://dshtauri.mintlify.site).
 
-- In the startup window, open **Configuration → Network** to set an HTTP, HTTPS, SOCKS5 or SOCKS5H proxy for desktop runtime/core downloads, update checks and plugin metadata queries. Leave it empty to inherit system/environment proxy settings. Changes apply to new requests; retry failed downloads after saving. SOCKS5H resolves destination names through the proxy, and loopback connections stay direct. This setting does not change Harness model requests or plugin subprocess networking.
+### Desktop proxy
 
-The proxy URL, including any credentials, is stored in the local desktop configuration. Prefer an HTTPS proxy when authenticating to a remote proxy: an HTTP proxy connection does not encrypt proxy credentials, even when the destination website uses HTTPS.
+- Set an HTTP, HTTPS, SOCKS5, or SOCKS5H proxy in **Configuration → Application → Proxy URL**.
+- Applies only to desktop runtime/core downloads, update checks, and plugin metadata—not model requests or plugin subprocess networking.
+- Leave empty to inherit system/environment settings. Saved changes apply to new requests; retry failed downloads afterward.
+- SOCKS5H resolves destination names through the proxy; loopback connections stay direct.
+- The URL, including credentials, is stored locally. Prefer HTTPS for remote proxy authentication; HTTP proxies leave credentials unencrypted even when the destination uses HTTPS.
 
 ## Mobile support
 
@@ -118,11 +123,15 @@ The same repository also maintains the **DSH Bridge** mobile app (Expo / React N
 
 ## Runtime
 
-On Windows, `STARTUP_LOW_INTEGRITY` means the process is running below Medium integrity and cannot write normal user data. This can happen when an installation folder has an inherited Low integrity label: a replacement executable can inherit it during an update. Inspect the folder and executable with `icacls`; restore the trusted installation's labels to Medium, or reinstall into a normal folder. Running the same Low-labeled executable as administrator does not remove its integrity restriction. Keep sessions and `DSH_HOME` unchanged. Startup failures now show a native Windows dialog with the underlying error.
+Windows startup failures show a native dialog with the underlying error. For `STARTUP_LOW_INTEGRITY`:
+
+- The process runs below Medium integrity and cannot write normal user data; updates can inherit a folder's Low label.
+- Inspect the folder and executable with `icacls`. Restore a trusted installation to Medium, or reinstall into a normal folder.
+- Running as administrator does not remove the Low-label restriction. Keep sessions and `DSH_HOME` unchanged.
 
 | Current baseline | Version |
 | --- | --- |
-| Desktop | `0.20.0-beta.1` |
+| Desktop | `0.22.1` |
 | Recommended Harness core | `0.2.0-rc.2` |
 | Declared minimum core | `0.1.5-rc.1`; not an all-plugin compatibility guarantee |
 | Node.js runtime | `22.22.0` |

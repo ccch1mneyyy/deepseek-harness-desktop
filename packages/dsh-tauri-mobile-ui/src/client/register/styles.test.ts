@@ -17,7 +17,7 @@ vi.mock('dsh-tauri/client', () => ({
 vi.mock('dsh-tauri-ui/client', () => ({ cssr, mountStyle }))
 
 afterEach(() => {
-  document.querySelectorAll('style[cssr-id="dsh-tauri-mobile-ui-styles"]').forEach(element => element.remove())
+  document.querySelectorAll('style[data-plugin="dsh-tauri-mobile-ui"]').forEach(element => element.remove())
   document.documentElement.removeAttribute('data-dsh-mobile-ui')
   vi.restoreAllMocks()
 })
@@ -36,16 +36,20 @@ it('owns mobile styles and composer activation until unload, and can reload clea
       '[class$="_turnErrorCode"]',
       '[data-slot="conversation.header"] [class$="_header"]',
       '[data-slot="main"] header[class*="_pageHead"]',
-      'header[class*="_pageHead"] [class*="_toolbar"]',
       '[data-slot="conversation.view"] [class$="_scroll"]',
       '[class*="_userStack"]',
       '[data-slot="main"] [data-conversation-scroll]',
     ]) {
       expect(style?.textContent).toContain(selector)
     }
+    const settingsStyle = document.querySelector('style[cssr-id="dsh-tauri-mobile-ui-settings-styles"]')
+    expect(settingsStyle?.getAttribute('data-plugin')).toBe('dsh-tauri-mobile-ui')
+    expect(settingsStyle?.textContent).toContain('(max-width: 767px)')
+    expect(settingsStyle?.textContent).toContain('[data-dsh-mobile-settings]')
     expect(document.documentElement.hasAttribute('data-dsh-mobile-ui')).toBe(true)
     dispose()
     expect(style?.isConnected).toBe(false)
+    expect(settingsStyle?.isConnected).toBe(false)
     expect(document.documentElement.hasAttribute('data-dsh-mobile-ui')).toBe(false)
   }
 })

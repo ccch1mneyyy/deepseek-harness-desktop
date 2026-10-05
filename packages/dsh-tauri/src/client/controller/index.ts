@@ -28,6 +28,14 @@ export interface LifecycleController {
     options?: AddEventListenerOptions,
   ) => () => void
   /**
+   * 受控 window 事件监听：dispose 时自动移除；返回移除句柄。
+   */
+  listenWindow: <K extends keyof WindowEventMap>(
+    type: K,
+    fn: (event: WindowEventMap[K]) => void,
+    options?: AddEventListenerOptions,
+  ) => () => void
+  /**
    * 受控 MutationObserver：dispose 时自动 disconnect；返回 observer 本体。
    * 观察配置是第三个参数且可省略，默认见 DEFAULT_MUTATION_OPTIONS。
    */
@@ -114,6 +122,21 @@ export function createLifecycleController(): LifecycleController {
       const remove = () => document.removeEventListener(type, handler, options)
       const unhook = controller.add(remove)
 
+      return () => {
+        remove()
+        unhook()
+      }
+    },
+
+    listenWindow(type, fn, options) {
+      if (isDisposed || typeof window === 'undefined')
+        return noop
+
+      const handler = fn as EventListener
+      window.addEventListener(type, handler, options)
+
+      const remove = () => window.removeEventListener(type, handler, options)
+      const unhook = controller.add(remove)
       return () => {
         remove()
         unhook()

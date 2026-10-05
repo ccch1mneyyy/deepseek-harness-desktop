@@ -30,6 +30,21 @@ describe('plugin preset chip i18n keys', () => {
   })
 })
 
+describe('one-click plugin upgrade messages', () => {
+  it.each([
+    ['en-US', 'Upgrade All', 'Upgrade or repair all {{count}} available plugins', 'No plugins available to upgrade'],
+    ['zh-CN', '一键升级', '升级或修复全部可操作的插件（{{count}}）', '暂无可升级的插件'],
+  ] as const)('provides the %s bulk upgrade label and hints', (locale, label, hint, empty) => {
+    const source = readFileSync(new URL(`../src/i18n/locales/${locale}.json`, import.meta.url), 'utf8')
+    const messages = JSON.parse(source) as Record<string, string>
+    expect(messages).toMatchObject({
+      'plugins.upgrade_all': label,
+      'plugins.upgrade_all_hint': hint,
+      'plugins.upgrade_all_empty': empty,
+    })
+  })
+})
+
 // ── Suite B — component references the preset key + condition ────────────────
 describe('configPlugin preset chip', () => {
   it('renders the plugins.preset key', () => {

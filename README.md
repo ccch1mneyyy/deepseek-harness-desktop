@@ -40,7 +40,7 @@
 
 - 🪶 **原生桌面** — Tauri 2 + React 19，内嵌本地 Harness Web 界面。
 - 🔄 **运行时管理** — 安装依赖、选择内核版本，并提供桌面端与内核更新入口。
-- 🧩 **插件管理** — 11 个内置插件；支持社区插件安装、升级、卸载与错误查看。
+- 🧩 **插件管理** — 12 个内置插件；支持本地路径安装、内置插件停用、社区插件安装、升级、卸载与错误查看。
 - 🗂️ **档案配置** — 分别管理插件与设置；档案不是操作系统安全沙箱。
 - 💽 **数据目录** — 安装时（Windows 安装包）可选择数据存放位置；Windows / macOS / Linux 都能在设置里整体迁移与回滚。
 - ⌨️ **命令行集成** — 通过托管 shim 提供 `dsh` / `pnpm`，不是全局 npm 内核安装。
@@ -49,14 +49,15 @@
 
 ## 内置插件
 
-随桌面资源分发的 11 个第一方插件：
+随桌面资源分发的 12 个第一方插件：
 
 | 插件 | 包标识 | 用途 |
 | --- | --- | --- |
 | [DSH Tauri](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri) | `dsh-tauri` | 桌面壳与 Harness 通信 |
 | [DSH Tauri UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-ui) | `dsh-tauri-ui` | 桌面设置界面 |
+| [DSH Tauri Mobile UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-mobile-ui) | `dsh-tauri-mobile-ui` | 触屏布局与移动端偏好设置 |
 | [DSH Tauri Worktree](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-worktree) | `dsh-tauri-worktree` | 会话 Git 工作树与检出 |
-| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | Skills、技能来源与 MCP 管理 |
+| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | 官方插件管理、可选市场、Skills 与 MCP |
 | [DSH Tauri Scheduler](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-scheduler) | `dsh-tauri-scheduler` | 定时任务与执行记录 |
 | [DSH Tauri Archive](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-archive) | `dsh-tauri-archive` | 聊天归档与恢复 |
 | [DSH Tauri Pet](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-pet) | `dsh-tauri-pet` | 桌宠与活动状态 |
@@ -65,7 +66,7 @@
 | [DSH Tauri SSH](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-ssh) | `dsh-tauri-ssh` | SSH 远端 Harness 连接与同步 |
 | [DSH Tauri Notification](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-notification) | `dsh-tauri-notification` | 会话通知与交互操作 |
 
-`dsh-tauri-experimental` 为可选实验包，默认关闭，不计入上述 11 个内置插件。
+`dsh-tauri-experimental` 为可选实验包，默认关闭，不计入上述 12 个内置插件。
 
 ## 可选预设
 
@@ -99,13 +100,17 @@ brew install dsh-tauri/desktop/deepseek-harness
 ```
 
 - 普通安装包首次启动需联网下载缺失的运行时与内核；Git 功能需要可用的 Git。
-- 仅在对应 Release 实际发布含运行时与内核资源的 `Bundle` 时，才可使用该捆绑包；**v0.20.0-beta.1 没有 Bundle 资产**。
+- 仅在对应 Release 实际发布含运行时与内核资源的 `Bundle` 时，才可使用该捆绑包；正式版 `0.22.1` 提供 Bundle 资产（`_Bundle_*.exe`、`_Bundle_*.deb`、两种 `_Bundle_*.dmg`）。
 - 本地运行不等于完全离线：模型服务、插件安装、更新与桌宠预设素材仍可能联网。
 - Linux 显示、Wayland、AppImage 与权限问题的处理见[安装与故障排查文档](https://dshtauri.mintlify.site)。
 
-- 启动界面的「配置 → 网络」可设置 HTTP、HTTPS、SOCKS5 或 SOCKS5H 代理，用于桌面端依赖/核心下载、更新检查及插件元数据查询。留空沿用系统/环境代理；保存后对新请求生效，下载失败后可重试。SOCKS5H 通过代理解析目标域名，本机回环连接始终直连。此设置不修改 Harness 模型请求或插件子进程的网络配置。
+### 桌面代理
 
-代理 URL（包括填入的账号密码）保存在本机桌面配置中。远程代理需要账号密码时，建议使用 HTTPS 代理；HTTP 代理连接不会加密代理认证信息，即使请求的目标网站使用 HTTPS。
+- 在**配置 → 应用 → 代理地址**设置 HTTP、HTTPS、SOCKS5 或 SOCKS5H 代理。
+- 仅用于桌面端依赖/内核下载、更新检查及插件元数据，不修改模型请求或插件子进程的网络配置。
+- 留空沿用系统/环境代理；保存后对新请求生效，可重试失败的下载。
+- SOCKS5H 通过代理解析目标域名；本机回环连接始终直连。
+- 代理 URL 含账号密码，保存在本机配置。远程认证优先使用 HTTPS 代理；HTTP 代理不会加密认证信息，即使目标网站使用 HTTPS。
 
 ## 移动端支持
 
@@ -118,11 +123,15 @@ brew install dsh-tauri/desktop/deepseek-harness
 
 ## 运行方式
 
-Windows 上出现 `STARTUP_LOW_INTEGRITY` 表示进程以低于 Medium 的完整性级别运行，无法写入正常用户的数据目录。安装目录若带有可继承的 Low 标签，更新替换的可执行文件可能继承该标签。可用 `icacls` 检查安装目录及可执行文件，将可信安装的标签恢复为 Medium，或重新安装到正常目录。以管理员身份运行同一个 Low 标签程序不会移除其完整性限制。无需删除会话或修改 `DSH_HOME`；启动失败时会通过原生 Windows 对话框显示具体错误。
+Windows 启动失败时会通过原生对话框显示具体错误。若出现 `STARTUP_LOW_INTEGRITY`：
+
+- 进程低于 Medium 完整性级别，无法写入正常用户数据；更新后的程序可能继承安装目录的 Low 标签。
+- 用 `icacls` 检查目录与程序；将可信安装恢复为 Medium，或重新安装到正常目录。
+- 以管理员身份运行不会移除 Low 标签限制；无需删除会话或修改 `DSH_HOME`。
 
 | 当前基线 | 版本 |
 | --- | --- |
-| 桌面端 | `0.20.0-beta.1` |
+| 桌面端 | `0.22.1` |
 | 推荐 Harness 内核 | `0.2.0-rc.2` |
 | 声明的内核最低版本 | `0.1.5-rc.1`，不保证所有插件兼容 |
 | Node.js 运行时 | `22.22.0` |

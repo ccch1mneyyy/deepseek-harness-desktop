@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import type { ReactNode } from 'react'
-import type { Plugin } from '@/store/modules/plugins'
+import type { Plugin, PluginProcess } from '@/store/modules/plugins'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfigPlugin } from './plugin'
 
 const { manager, openDialog, mocks, hmrStatus } = vi.hoisted(() => ({
-  manager: { installed: [] as Plugin[], processes: [], loading: false, error: '', disable: vi.fn(), enable: vi.fn(), search: vi.fn(), install: vi.fn() },
+  manager: { installed: [] as Plugin[], processes: [] as PluginProcess[], loading: false, error: '', disable: vi.fn(), enable: vi.fn(), search: vi.fn(), install: vi.fn(), upgrade: vi.fn() },
   openDialog: vi.fn(),
   mocks: {
     invoke: vi.fn(),
@@ -46,7 +46,10 @@ vi.mock('@/components/item', () => ({ Item: ({ left, right }: { left: ReactNode,
   </div>
 ) }))
 vi.mock('@/components/ellipsis', () => ({ Ellipsis: ({ children }: { children: ReactNode }) => <span>{children}</span> }))
-vi.mock('@/components/panel', () => ({ Panel: { Header: () => null, Loadable: ({ children }: { children: ReactNode }) => <div>{children}</div> } }))
+vi.mock('@/components/panel', () => ({ Panel: {
+  Header: ({ action }: { action: ReactNode }) => <div>{action}</div>,
+  Loadable: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+} }))
 vi.mock('@heroui/react', () => ({
   Chip: ({ children, onClick }: { children: ReactNode, onClick?: () => void }) => <button type="button" onClick={onClick}>{children}</button>,
   Button: ({ children, onPress, isDisabled, 'aria-label': ariaLabel }: { 'children': ReactNode, 'onPress'?: () => void, 'isDisabled'?: boolean, 'aria-label'?: string }) => (
@@ -99,8 +102,14 @@ function showBuiltIn() {
   fireEvent.click(screen.getByRole('button', { name: 'plugins.builtin_title' }))
 }
 
+function showAdvanced() {
+  fireEvent.click(screen.getByRole('switch', { name: 'plugins.advanced_options' }))
+}
+
 beforeEach(() => {
   manager.installed = [plugin()]
+  manager.processes = []
+  manager.upgrade.mockReset().mockResolvedValue([])
   manager.disable.mockReset().mockResolvedValue(undefined)
   manager.enable.mockReset().mockResolvedValue(undefined)
   manager.search.mockReset().mockResolvedValue([])
@@ -174,6 +183,113 @@ describe('built-in plugin toggles', () => {
   })
 })
 
+describe('one-click plugin upgrade', () => {
+  it('shows the bulk upgrade immediately after open preset without enabling advanced options', () => {
+    render(<ConfigPlugin />)
+    const preset = screen.getByRole('button', { name: 'preinstall.open_preset' })
+    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' })
+    expect(preset.nextElementSibling).toBe(upgradeAll)
+    expect(screen.getByRole('switch', { name: 'plugins.advanced_options' }).getAttribute('aria-checked')).toBe('false')
+  })
+
+  it.each([
+    ['no plugins', []],
+    ['only current managed plugins', [plugin({ internal: false })]],
+    ['only built-in updates', [plugin({ updateAvailable: true, latest: '2.0.0' })]],
+  ] as const)('disables bulk upgrade with %s', (_case, installed) => {
+    manager.installed = [...installed]
+    render(<ConfigPlugin />)
+    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
+    expect(upgradeAll.disabled).toBe(true)
+    fireEvent.click(upgradeAll)
+    expect(manager.upgrade).not.toHaveBeenCalled()
+  })
+
+  it('submits managed updates and repairs as one group with the displayed target versions', async () => {
+    manager.installed = [
+      plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' }),
+      plugin({ id: 'unresolved', internal: false, updateAvailable: true }),
+      plugin({ id: 'broken', internal: false, error: { message: 'broken', action: 'runtime', at: '1' } }),
+      plugin({ id: 'current', internal: false }),
+      plugin({ id: 'built-in', updateAvailable: true, latest: '2.0.0' }),
+    ]
+    render(<ConfigPlugin />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade_all' })))
+    expect(manager.upgrade).toHaveBeenCalledExactlyOnceWith([
+      { spec: 'updated', version: '2.0.0' },
+      'unresolved',
+      'broken',
+    ])
+    expect(mocks.toast).not.toHaveBeenCalled()
+    expect(mocks.restart).not.toHaveBeenCalled()
+  })
+
+  it('prevents duplicate bulk and row submissions until the group settles', async () => {
+    let settle: () => void = () => {}
+    manager.upgrade.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      settle = resolve
+    }))
+    manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' })]
+    render(<ConfigPlugin />)
+    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
+    fireEvent.click(upgradeAll)
+    expect(upgradeAll.disabled).toBe(true)
+    fireEvent.click(upgradeAll)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade 2.0.0' })))
+    expect(manager.upgrade).toHaveBeenCalledExactlyOnceWith([{ spec: 'updated', version: '2.0.0' }])
+
+    await act(async () => settle())
+    expect(upgradeAll.disabled).toBe(false)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade 2.0.0' })))
+    expect(manager.upgrade).toHaveBeenCalledTimes(2)
+    expect(manager.upgrade).toHaveBeenLastCalledWith({ spec: 'updated', version: '2.0.0' })
+  })
+
+  it('excludes plugins already queued while allowing other updates', async () => {
+    manager.installed = [
+      plugin({ id: 'queued', internal: false, updateAvailable: true, latest: '2.0.0' }),
+      plugin({ id: 'available', internal: false, updateAvailable: true, latest: '3.0.0' }),
+    ]
+    manager.processes = [{ id: 'p1', groupId: 'g1', name: 'queued', spec: 'queued@2.0.0', type: 'upgrade', status: 'unauthorized' }]
+    const { rerender } = render(<ConfigPlugin />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade_all' })))
+    expect(manager.upgrade).toHaveBeenCalledExactlyOnceWith([{ spec: 'available', version: '3.0.0' }])
+
+    manager.installed = [plugin({ id: 'queued', internal: false, updateAvailable: true })]
+    rerender(<ConfigPlugin />)
+    expect((screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('excludes a row whose local action is still pending', async () => {
+    let settle: () => void = () => {}
+    manager.disable.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      settle = resolve
+    }))
+    manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' })]
+    render(<ConfigPlugin />)
+    fireEvent.click(screen.getByRole('button', { name: 'plugins.disable' }))
+    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
+    expect(upgradeAll.disabled).toBe(true)
+    fireEvent.click(upgradeAll)
+    expect(manager.upgrade).not.toHaveBeenCalled()
+    await act(async () => settle())
+    expect(upgradeAll.disabled).toBe(false)
+  })
+
+  it('releases the bulk and row guards after a manager failure without duplicating its toast', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    manager.upgrade.mockRejectedValueOnce(new Error('UPGRADE_FAILED'))
+    manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true })]
+    render(<ConfigPlugin />)
+    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
+    await act(async () => fireEvent.click(upgradeAll))
+    expect(upgradeAll.disabled).toBe(false)
+    expect(mocks.toast).not.toHaveBeenCalled()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade' })))
+    expect(manager.upgrade.mock.calls).toEqual([[['updated']], ['updated']])
+  })
+})
+
 describe('local plugin folder picking', () => {
   /** 目录选择器由宿主在三平台各用原生实现，这里让 get_local_plugin_hmr 与 pick 各自返回固定值。 */
   function mockLocalCommands(picked: string | null) {
@@ -202,6 +318,28 @@ describe('local plugin folder picking', () => {
     expect(manager.install).toHaveBeenCalledExactlyOnceWith(['link:D:/plugins/mine'])
   })
 
+  it('keeps a picked path containing spaces as one spec', async () => {
+    mockLocalCommands('link:D:/My Plugins/mine')
+    render(<ConfigPlugin />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.local_dir' })))
+    const input = screen.getByPlaceholderText('plugins.install_placeholder') as HTMLInputElement
+    expect(input.value).toBe('link:D:/My Plugins/mine')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+    await waitFor(() => expect(manager.search).toHaveBeenCalledExactlyOnceWith(['link:D:/My Plugins/mine']))
+    expect(manager.install).toHaveBeenCalledExactlyOnceWith(['link:D:/My Plugins/mine'])
+  })
+
+  it('splits specs again once the picked path is edited by hand', async () => {
+    mockLocalCommands('link:D:/My Plugins/mine')
+    render(<ConfigPlugin />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.local_dir' })))
+    const input = screen.getByPlaceholderText('plugins.install_placeholder') as HTMLInputElement
+    await act(async () => fireEvent.change(input, { target: { value: 'dsh-a, dsh-b  dsh-c' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+    await waitFor(() => expect(manager.search).toHaveBeenCalledExactlyOnceWith(['dsh-a', 'dsh-b', 'dsh-c']))
+    expect(manager.install).toHaveBeenCalledExactlyOnceWith(['dsh-a', 'dsh-b', 'dsh-c'])
+  })
+
   it('keeps the install box untouched when the folder picker is cancelled', async () => {
     mockLocalCommands(null)
     render(<ConfigPlugin />)
@@ -226,6 +364,27 @@ describe('local plugin folder picking', () => {
 })
 
 describe('local plugin hot reload switch', () => {
+  it('hides the whole hot reload block unless advanced options are enabled', () => {
+    hmrStatus.data = { enabled: true, watching: false, patchPath: null, roots: [] }
+    render(<ConfigPlugin />)
+    expect(screen.getByRole('switch', { name: 'plugins.advanced_options' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.queryByRole('switch', { name: 'plugins.hmr' })).toBeNull()
+    expect(screen.queryByText('plugins.hmr')).toBeNull()
+    expect(screen.queryByText('plugins.hmr_hint')).toBeNull()
+    expect(screen.queryByText('plugins.hmr_idle')).toBeNull()
+
+    showAdvanced()
+    expect(screen.getByRole('switch', { name: 'plugins.hmr' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('plugins.hmr_hint').textContent).toBe('plugins.hmr_hint')
+    expect(screen.getByText('plugins.hmr_idle').textContent).toBe('plugins.hmr_idle')
+
+    showAdvanced()
+    expect(screen.queryByRole('switch', { name: 'plugins.hmr' })).toBeNull()
+    expect(screen.queryByText('plugins.hmr_hint')).toBeNull()
+    expect(screen.queryByText('plugins.hmr_idle')).toBeNull()
+    expect(mocks.invoke).not.toHaveBeenCalledWith('set_local_plugin_hmr', expect.anything())
+  })
+
   it('sends the new value to the host and offers a restart', async () => {
     hmrStatus.data = { enabled: false, watching: false, patchPath: null, roots: [] }
     mocks.invoke.mockImplementation(async (command: string) => {
@@ -236,6 +395,7 @@ describe('local plugin hot reload switch', () => {
       throw new Error(`Unexpected command: ${command}`)
     })
     render(<ConfigPlugin />)
+    showAdvanced()
     await act(async () => fireEvent.click(screen.getByRole('switch', { name: 'plugins.hmr' })))
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('set_local_plugin_hmr', { enabled: true }))
     expect(mocks.setQueryData).toHaveBeenCalledWith(['local_plugin_hmr'], expect.objectContaining({ enabled: true }))
@@ -251,6 +411,7 @@ describe('local plugin hot reload switch', () => {
       throw new Error(`Unexpected command: ${command}`)
     })
     render(<ConfigPlugin />)
+    showAdvanced()
     await act(async () => fireEvent.click(screen.getByRole('switch', { name: 'plugins.hmr' })))
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('plugins.hmr_save_failed', { variant: 'danger' }))
     expect(mocks.toast).not.toHaveBeenCalledWith('plugins.hmr_restart_hint', expect.anything())

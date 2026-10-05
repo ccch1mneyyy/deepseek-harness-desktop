@@ -40,23 +40,24 @@
 
 - 🪶 **Escritorio nativo** — Tauri 2 + React 19, con la interfaz web local de Harness integrada.
 - 🔄 **Gestión del runtime** — Instalá dependencias, elegí versiones del núcleo y accedé a actualizaciones del escritorio y del núcleo.
-- 🧩 **Gestión de plugins** — 11 plugins integrados, más instalación, actualización, desinstalación y detalles de errores de plugins comunitarios.
+- 🧩 **Gestión de plugins** — 12 plugins integrados; instalación desde directorios locales, desactivación de integrados y gestión de plugins comunitarios.
 - 🗂️ **Configuración por perfiles** — Separá plugins y ajustes; los perfiles no son un sandbox de seguridad del sistema operativo.
-- 💽 **Directorio de datos** — En Windows, elegí dónde se guardan los datos al instalar, y migralo o revertilo después en Ajustes.
+- 💽 **Directorio de datos** — Elegí la ubicación al instalar en Windows; migrá o revertí los datos desde Ajustes en Windows, macOS y Linux.
 - ⌨️ **Integración con la terminal** — Shims administrados de `dsh` / `pnpm`, no una instalación global del núcleo por npm.
 - 🐾 **Mascotas de escritorio** — Recursos Pets / Codex, importación de paquetes y actividad de conversaciones; los recursos predefinidos son remotos.
 - 🎨 **Personalización** — 8 paletas, modo terminal y transparencia nativa, con restauración de valores predeterminados en un clic.
 
 ## Plugins integrados
 
-Los 11 plugins propios distribuidos con los recursos del escritorio:
+Los 12 plugins propios distribuidos con los recursos del escritorio:
 
 | Plugin | Paquete | Función |
 | --- | --- | --- |
 | [DSH Tauri](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri) | `dsh-tauri` | Comunicación entre el escritorio y Harness |
 | [DSH Tauri UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-ui) | `dsh-tauri-ui` | Interfaz de ajustes del escritorio |
+| [DSH Tauri Mobile UI](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-mobile-ui) | `dsh-tauri-mobile-ui` | Diseños táctiles y preferencias móviles |
 | [DSH Tauri Worktree](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-worktree) | `dsh-tauri-worktree` | Worktrees Git por sesión y checkout |
-| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | Skills, fuentes de skills y gestión de MCP |
+| [DSH Tauri Extension](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-extension) | `dsh-tauri-extension` | Gestor oficial de plugins, mercado opcional, Skills y MCP |
 | [DSH Tauri Scheduler](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-scheduler) | `dsh-tauri-scheduler` | Tareas programadas e historial |
 | [DSH Tauri Archive](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-archive) | `dsh-tauri-archive` | Archivo y restauración de chats |
 | [DSH Tauri Pet](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-pet) | `dsh-tauri-pet` | Mascotas y estados de actividad |
@@ -65,7 +66,7 @@ Los 11 plugins propios distribuidos con los recursos del escritorio:
 | [DSH Tauri SSH](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-ssh) | `dsh-tauri-ssh` | Conexiones Harness remotas y sincronización por SSH |
 | [DSH Tauri Notification](https://github.com/dsh-tauri/deepseek-harness-desktop/tree/main/packages/dsh-tauri-notification) | `dsh-tauri-notification` | Notificaciones de conversaciones y acciones |
 
-`dsh-tauri-experimental` es opcional, está desactivado por defecto y no cuenta entre los 11 integrados.
+`dsh-tauri-experimental` es opcional, está desactivado por defecto y no cuenta entre los 12 integrados.
 
 ## Preajustes opcionales
 
@@ -99,13 +100,17 @@ brew install dsh-tauri/desktop/deepseek-harness
 ```
 
 - Los instaladores normales necesitan red en el primer arranque para descargar los componentes faltantes del runtime y del núcleo. Las funciones Git necesitan un Git disponible.
-- Usá un `Bundle` solo si ese release realmente incluye los recursos del runtime y del núcleo. **v0.20.0-beta.1 no tiene assets Bundle**.
+- Usá un `Bundle` solo si ese release realmente incluye los recursos del runtime y del núcleo. La versión estable `0.22.1` publica assets Bundle (`_Bundle_*.exe`, `_Bundle_*.deb` y dos `_Bundle_*.dmg`).
 - Ejecutar localmente no significa estar totalmente sin conexión: modelos, instalación de plugins, actualizaciones y recursos de mascotas predefinidas pueden usar red.
 - Para problemas de pantalla, Wayland, AppImage y permisos en Linux, consultá la [documentación de instalación y solución de problemas](https://dshtauri.mintlify.site).
 
-- En la ventana de inicio, abrí **Configuration → Network** para configurar un proxy HTTP, HTTPS, SOCKS5 o SOCKS5H para las descargas de runtime/núcleo del escritorio, la comprobación de actualizaciones y las consultas de metadatos de plugins. Dejalo vacío para heredar la configuración de proxy del sistema/entorno. Los cambios se aplican a las solicitudes nuevas; reintentá las descargas que fallen después de guardar. SOCKS5H resuelve los nombres de destino a través del proxy, y las conexiones de loopback siguen siendo directas. Esta opción no modifica las solicitudes de modelos de Harness ni la red de los subprocesos de plugins.
+### Proxy del escritorio
 
-La URL del proxy, incluidas las credenciales, se guarda en la configuración local del escritorio. Si el proxy remoto pide usuario y contraseña, preferí un proxy HTTPS: una conexión por proxy HTTP no cifra las credenciales, aunque el sitio de destino use HTTPS.
+- Configurá un proxy HTTP, HTTPS, SOCKS5 o SOCKS5H en **Configuración → Aplicación → URL del proxy**.
+- Solo afecta descargas del runtime/núcleo, actualizaciones y metadatos de plugins; no cambia peticiones de modelos ni subprocesos de plugins.
+- Vacío hereda la configuración del sistema/entorno. Los cambios se aplican a nuevas peticiones; reintentá las descargas fallidas.
+- SOCKS5H resuelve los nombres por el proxy; las conexiones de loopback siguen directas.
+- La URL, incluidas credenciales, se guarda localmente. Preferí HTTPS para autenticarte ante un proxy remoto; HTTP no cifra esas credenciales aunque el destino use HTTPS.
 
 ## Soporte móvil
 
@@ -118,11 +123,15 @@ El mismo repositorio también mantiene la app móvil **DSH Bridge** (Expo / Reac
 
 ## Runtime
 
-En Windows, `STARTUP_LOW_INTEGRITY` significa que el proceso se ejecuta por debajo del nivel de integridad Medio y no puede escribir en el directorio de datos normal del usuario. Puede pasar cuando una carpeta de instalación tiene una etiqueta de integridad Baja heredada: un ejecutable de reemplazo puede heredarla durante una actualización. Revisá la carpeta y el ejecutable con `icacls`; restaurá las etiquetas de la instalación de confianza a Medio, o reinstalá en una carpeta normal. Ejecutar ese mismo ejecutable con etiqueta Baja como administrador no elimina la restricción de integridad. No borres las sesiones ni cambies `DSH_HOME`. Ahora los fallos de arranque muestran un diálogo nativo de Windows con el error subyacente.
+Windows muestra los errores de inicio en un diálogo nativo. Para `STARTUP_LOW_INTEGRITY`:
+
+- El proceso está por debajo de Medium y no puede escribir datos normales; una actualización puede heredar la etiqueta Low del directorio.
+- Revisá el directorio y el ejecutable con `icacls`. Restaurá una instalación confiable a Medium o reinstalá en un directorio normal.
+- Ejecutar como administrador no elimina esa restricción. No borres sesiones ni cambies `DSH_HOME`.
 
 | Base actual | Versión |
 | --- | --- |
-| Escritorio | `0.20.0-beta.1` |
+| Escritorio | `0.22.1` |
 | Núcleo Harness recomendado | `0.2.0-rc.2` |
 | Núcleo mínimo declarado | `0.1.5-rc.1`; no garantiza compatibilidad con todos los plugins |
 | Runtime Node.js | `22.22.0` |

@@ -15,6 +15,7 @@ const CMD_TOGGLE = 'dsh://sidebar:toggle'
 const EVENT_SIDEBAR_COLLAPSED = 'dsh://sidebar:collapsed'
 const ERROR_TYPE = 'dsh://plugin-error'
 const SIDEBAR_COLLAPSED_ATTRIBUTE = 'data-sidebar-collapsed'
+const MOBILE_SIDEBAR_ATTRIBUTE = 'data-dsh-mobile-sidebar'
 
 /** 假 MutationObserver：记录回调，供测试手动触发 DOM 变化。 */
 class FakeMutationObserver {
@@ -64,11 +65,16 @@ function stubHost(): Host {
 }
 
 /** 假 document：`[data-shell-overlay]` 的父节点即 AppFrame。 */
-function stubDocument(collapsed: boolean): { setCollapsed: (value: boolean) => void } {
+function stubDocument(collapsed: boolean): { setCollapsed: (value: boolean) => void, setMobileOwned: (value: boolean) => void } {
   let state = collapsed
+  let mobileOwned = false
   const frame = { hasAttribute: (name: string) => name === SIDEBAR_COLLAPSED_ATTRIBUTE && state }
+  const documentElement = {
+    hasAttribute: (name: string) => name === MOBILE_SIDEBAR_ATTRIBUTE && mobileOwned,
+  }
   vi.stubGlobal('document', {
     body: {},
+    documentElement,
     querySelector: () => ({ parentElement: frame }),
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -76,6 +82,9 @@ function stubDocument(collapsed: boolean): { setCollapsed: (value: boolean) => v
   return {
     setCollapsed(value: boolean) {
       state = value
+    },
+    setMobileOwned(value: boolean) {
+      mobileOwned = value
     },
   }
 }
@@ -164,5 +173,27 @@ describe('sidebarFeature', () => {
     frame.setCollapsed(false)
     host.dispatch({ type: CMD_TOGGLE })
     expect(collapsedReports(host)).toEqual([false, true])
+  })
+
+  it('defers bridge ownership to the mobile drawer and resumes after handoff', () => {
+    const host = stubHost()
+    const frame = stubDocument(false)
+    vi.stubGlobal('MutationObserver', FakeMutationObserver)
+    const { ctx, toggleSidebar } = fakeCtx()
+
+    const dispose = sidebarFeature.call(ctx)
+    frame.setMobileOwned(true)
+    host.dispatch({ type: CMD_TOGGLE })
+    FakeMutationObserver.latest?.callback([], FakeMutationObserver.latest as unknown as MutationObserver)
+    expect(toggleSidebar).not.toHaveBeenCalled()
+    expect(collapsedReports(host)).toEqual([false])
+
+    frame.setMobileOwned(false)
+    FakeMutationObserver.latest?.callback([], FakeMutationObserver.latest as unknown as MutationObserver)
+    expect(collapsedReports(host)).toEqual([false, false])
+    host.dispatch({ type: CMD_TOGGLE })
+    expect(toggleSidebar).toHaveBeenCalledTimes(1)
+
+    dispose()
   })
 })
