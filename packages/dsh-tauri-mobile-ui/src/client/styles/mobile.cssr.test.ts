@@ -49,16 +49,17 @@ describe('mobile conversation layout', () => {
     expect(css).not.toContain('[data-sidebar-collapsed]')
   })
 
-  it('keeps the sidebar stationary behind a raised rounded main panel without a gray shade', () => {
-    const declarations = (selector: string): Record<string, string> => {
-      const values: Record<string, string> = {}
-      root.walkRules(selector, (rule) => {
-        rule.walkDecls((decl) => {
-          values[decl.prop] = `${decl.value}${decl.important ? ' !important' : ''}`
-        })
+  const declarations = (selector: string): Record<string, string> => {
+    const values: Record<string, string> = {}
+    root.walkRules(selector, (rule) => {
+      rule.walkDecls((decl) => {
+        values[decl.prop] = `${decl.value}${decl.important ? ' !important' : ''}`
       })
-      return values
-    }
+    })
+    return values
+  }
+
+  it('keeps the sidebar stationary behind a raised rounded main panel without a gray shade', () => {
     expect(declarations('html[data-dsh-mobile-sidebar] [class$="_sidebarCol"]')).toMatchObject({
       'z-index': '0',
       'transform': 'none',
@@ -88,12 +89,34 @@ describe('mobile conversation layout', () => {
       position: 'sticky',
       top: '0',
     })
-    expect(declarations('[data-dsh-mobile-sidebar-toggle]')).toMatchObject({
-      'width': '24px',
-      'height': '24px',
-      'background': 'transparent',
-      'box-shadow': 'none',
-    })
+  })
+
+  it('keeps the navbar controls as naked icons without button backgrounds or shadows', () => {
+    for (const selector of ['[data-dsh-mobile-sidebar-toggle]', '[data-dsh-mobile-new-session]']) {
+      expect(declarations(selector)).toMatchObject({
+        'padding': '0',
+        'border': '0',
+        'background': 'transparent',
+        'box-shadow': 'none',
+      })
+    }
+  })
+
+  it('renders the smaller sidebar toggle at 20px while retaining the 24px new-session icon', () => {
+    for (const [selector, size] of [
+      ['[data-dsh-mobile-sidebar-toggle]', '20px'],
+      ['[data-dsh-mobile-new-session]', '24px'],
+    ]) {
+      expect(declarations(selector)).toMatchObject({ width: size, height: size })
+      const rules: unknown[] = []
+      root.walkRules(selector, (rule) => {
+        rules.push(rule)
+        expect(rule.parent?.type).toBe('atrule')
+        if (rule.parent?.type === 'atrule')
+          expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
+      })
+      expect(rules).toHaveLength(1)
+    }
   })
 
   it('overrides conversation scroll bottom padding to zero inside the mobile media query', () => {
