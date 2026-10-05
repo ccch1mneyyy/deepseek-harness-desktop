@@ -2,7 +2,7 @@
 
 [English](<./DEVELOPMENT.md>) · [中文](<./DEVELOPMENT.zh.md>) · [README](<../README.en.md>)
 
-Tauri 2 + React 19: UI in [`src/`](<../src/>), Rust backend in [`src-tauri/`](<../src-tauri/>), plugins in [`packages/`](<../packages/>). Current desktop: `0.20.0-beta.1`; recommended Harness core: `0.2.0-rc.2`.
+Tauri 2 + React 19: UI in [`src/`](<../src/>), Rust backend in [`src-tauri/`](<../src-tauri/>), plugins in [`packages/`](<../packages/>). Current desktop: `0.22.1`; recommended Harness core: `0.2.0-rc.2`.
 
 Read [AGENTS.md](<../AGENTS.md>) and the [routed specifications](<./specs/devlopment.md>) before changes. Do not inspect the restricted archive directory or run builds during plugin work.
 
