@@ -85,7 +85,7 @@ export function ConfigPlugin() {
   const [installing, setInstalling] = useState(false)
   /** 兼容性预检结果：安装前先经 manager.search 展示解析到的版本与兼容性 */
   const [searchResults, setSearchResults] = useState<PluginSearchResult[] | null>(null)
-  const [upgradingAll, setUpgradingAll] = useState(false)
+  const [upgradingAll, toggleUpgradingAll] = useToggle()
   const upgradable = managedPlugins.filter(plugin => (plugin.updateAvailable || plugin.error != null) && !rowBusy(plugin.id))
 
   const [dialogHolder, openDialog] = useOverlay(Modal, { type: 'holder' })
@@ -237,7 +237,7 @@ export function ConfigPlugin() {
   async function onUpgradeAll() {
     if (upgradingAll || upgradable.length === 0)
       return
-    setUpgradingAll(true)
+    toggleUpgradingAll(true)
     const targets = upgradable
     for (const plugin of targets)
       markBusy(plugin.id, 'update')
@@ -252,7 +252,7 @@ export function ConfigPlugin() {
     finally {
       for (const plugin of targets)
         clearBusy(plugin.id, 'update')
-      setUpgradingAll(false)
+      toggleUpgradingAll(false)
     }
   }
 
