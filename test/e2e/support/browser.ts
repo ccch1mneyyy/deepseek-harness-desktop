@@ -92,6 +92,9 @@ export interface NewDshPageOptions {
   ready?: string
   path?: string
   dismissModals?: boolean
+  viewport?: { width: number, height: number }
+  hasTouch?: boolean
+  isMobile?: boolean
 }
 
 /** 断言本轮没有任何合成事件兜底：真实指针点击必须自己点得通。 */
@@ -115,8 +118,8 @@ export function launchDshBrowser(): Promise<Browser> {
   return chromium.launch()
 }
 
-export function newDshContext(browser: Browser): Promise<BrowserContext> {
-  return browser.newContext({ viewport: APP_FRAME_VIEWPORT, locale: APP_LOCALE })
+export function newDshContext(browser: Browser, options: Pick<NewDshPageOptions, 'viewport' | 'hasTouch' | 'isMobile'> = {}): Promise<BrowserContext> {
+  return browser.newContext({ viewport: options.viewport ?? APP_FRAME_VIEWPORT, hasTouch: options.hasTouch, isMobile: options.isMobile, locale: APP_LOCALE })
 }
 
 export async function addSessionCookie(context: BrowserContext): Promise<void> {
@@ -124,10 +127,10 @@ export async function addSessionCookie(context: BrowserContext): Promise<void> {
   await context.addCookies([{ name, value: rest.join('='), url: inject('dshBaseUrl') }])
 }
 
-async function installEmbedRoute(page: Page): Promise<void> {
+async function installEmbedRoute(page: Page, viewport: { width: number, height: number }): Promise<void> {
   const embedUrl = `${inject('dshBaseUrl')}${EMBEDDED_DOCUMENT_PATH}`
-  const htmlContent = `<!doctype html><html><body style="margin:0;overflow:hidden">`
-    + `<iframe id="dsh" src="/" style="width:${APP_FRAME_VIEWPORT.width}px;height:${APP_FRAME_VIEWPORT.height}px;border:0"></iframe>`
+  const htmlContent = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;overflow:hidden">`
+    + `<iframe id="dsh" src="/" style="width:${viewport.width}px;height:${viewport.height}px;border:0"></iframe>`
     + '</body></html>'
 
   await page.route(embedUrl, route =>
@@ -356,7 +359,7 @@ export async function newDshPage(
   browser: Browser,
   options: NewDshPageOptions = {},
 ): Promise<DshPage> {
-  const context = await newDshContext(browser)
+  const context = await newDshContext(browser, options)
   await addSessionCookie(context)
 
   const page = await context.newPage()
@@ -365,7 +368,7 @@ export async function newDshPage(
   const isEmbedded = options.path === undefined
 
   if (isEmbedded) {
-    await installEmbedRoute(page)
+    await installEmbedRoute(page, options.viewport ?? APP_FRAME_VIEWPORT)
   }
 
   await page.goto(appUrl(options.path ?? EMBEDDED_DOCUMENT_PATH))

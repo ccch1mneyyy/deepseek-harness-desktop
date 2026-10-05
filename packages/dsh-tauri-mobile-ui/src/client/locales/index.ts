@@ -8,6 +8,7 @@ const zh = {
   'navbar.label': '会话导航',
   'session.new': '新会话',
   'session.failed': '无法新建会话，请重试',
+  'settings.back': '返回设置分类',
 } as const
 
 const en: Record<keyof typeof zh, string> = {
@@ -17,6 +18,7 @@ const en: Record<keyof typeof zh, string> = {
   'navbar.label': 'Conversation navigation',
   'session.new': 'New Session',
   'session.failed': 'Unable to start a session. Please try again.',
+  'settings.back': 'Back to settings categories',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

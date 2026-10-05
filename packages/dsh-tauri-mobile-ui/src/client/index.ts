@@ -4,6 +4,7 @@ import { PLUGIN_ID } from '../shared/constants'
 import { locale } from './locales'
 import { installBridgeConfig, registerBridgeConfig } from './register/bridge'
 import { registerMobilePreferences } from './register/preferences'
+import { registerMobileSettings } from './register/settings'
 import { registerMobileSidebar } from './register/sidebar'
 import { registerStyles } from './register/styles'
 
@@ -17,4 +18,5 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(registerStyles, `${PLUGIN_ID}: styles`)
   ctx.effect(registerMobilePreferences, `${PLUGIN_ID}: preferences`)
   ctx.effect(registerMobileSidebar, `${PLUGIN_ID}: sidebar`)
+  ctx.effect(registerMobileSettings, `${PLUGIN_ID}: settings`)
 }
