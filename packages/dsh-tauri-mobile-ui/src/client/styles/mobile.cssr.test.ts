@@ -27,7 +27,7 @@ describe('mobile conversation layout', () => {
       '[data-slot="conversation.view"] [class$="_scroll"]',
       '[class*="_userStack"]',
       '[data-slot="main"] [data-conversation-scroll]',
-      '[data-slot="root"] > [class$="_frame"]',
+
     ]) {
       expect(css).toContain(selector)
     }
@@ -36,6 +36,7 @@ describe('mobile conversation layout', () => {
   it('positions the drawer without relying on the upstream collapsed marker', () => {
     const css = root.toString()
     for (const selector of [
+      'html[data-dsh-mobile-sidebar] [data-slot="root"] > [class$="_frame"]',
       'html[data-dsh-mobile-sidebar] [class$="_sidebarCol"]',
       'html[data-dsh-mobile-sidebar] body [data-slot="sidebar"]',
       'html[data-dsh-mobile-sidebar] [class$="_centerCol"]',

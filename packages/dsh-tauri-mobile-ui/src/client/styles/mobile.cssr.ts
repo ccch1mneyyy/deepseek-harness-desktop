@@ -41,7 +41,7 @@ export default c(`@media ${MOBILE_MEDIA_QUERIES.join(' and ')}`, [
   c('[data-slot="main"] [data-conversation-scroll]', {
     paddingBottom: '0 !important',
   }),
-  c('[data-slot="root"] > [class$="_frame"]', {
+  c('html[data-dsh-mobile-sidebar] [data-slot="root"] > [class$="_frame"]', {
     gridTemplateColumns: 'minmax(0, 1fr) !important',
     background: 'var(--dsw-specific-sidebar-fill) !important',
     transition: 'none !important',

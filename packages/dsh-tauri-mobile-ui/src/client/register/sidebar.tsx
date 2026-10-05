@@ -56,6 +56,12 @@ function getFrame(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-shell-overlay]')?.parentElement ?? null
 }
 
+function canOwnMobileSidebar(): boolean {
+  const frame = getFrame()
+  return detectMobileDevice() && window.innerWidth < SIDEBAR_BREAKPOINT
+    && (frame === null || frame.hasAttribute('data-rightbar-collapsed'))
+}
+
 function canStartGesture(target: EventTarget | null, frame: HTMLElement): target is Element {
   if (!(target instanceof Element) || !frame.contains(target))
     return false
@@ -122,7 +128,7 @@ export const registerMobileSidebar = defineRegister<ClientContext>((controller, 
     return () => listeners.delete(listener)
   }
   let snapshot: SidebarSnapshot = {
-    mobile: detectMobileDevice() && window.innerWidth < SIDEBAR_BREAKPOINT,
+    mobile: canOwnMobileSidebar(),
     open: false,
     dragging: false,
     offset: 0,
@@ -294,7 +300,7 @@ export const registerMobileSidebar = defineRegister<ClientContext>((controller, 
     publish({ ...snapshot, dragging: false, offset: snapshot.open ? snapshot.width : 0 })
   }
   const syncMobile = (): void => {
-    const mobile = detectMobileDevice() && window.innerWidth < SIDEBAR_BREAKPOINT
+    const mobile = canOwnMobileSidebar()
     const width = getSidebarWidth()
     const wasMobile = snapshot.mobile
     if (!mobile) {
@@ -511,7 +517,7 @@ export const registerMobileSidebar = defineRegister<ClientContext>((controller, 
     }
   }, {
     attributes: true,
-    attributeFilter: ['class', 'data-shell-overlay', 'data-sidebar-collapsed', 'data-dsh-mobile-sidebar'],
+    attributeFilter: ['class', 'data-shell-overlay', 'data-sidebar-collapsed', 'data-rightbar-collapsed', 'data-dsh-mobile-sidebar'],
     childList: true,
     subtree: true,
   })

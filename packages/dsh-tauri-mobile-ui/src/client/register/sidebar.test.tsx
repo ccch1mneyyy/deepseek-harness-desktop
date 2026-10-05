@@ -700,6 +700,38 @@ describe('registerMobileSidebar', () => {
     expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar')).toBe(false)
   })
 
+  it('yields to an open rightbar and resumes closed without changing core layout state', async () => {
+    const { main, overlay } = setupFrame()
+    const frame = overlay.parentElement!
+    const { ctx } = register()
+    renderOverlay(overlay)
+    fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }))
+    expect(main.inert).toBe(true)
+
+    act(() => frame.removeAttribute('data-rightbar-collapsed'))
+    await waitFor(() => expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar')).toBe(false))
+    expect(main.inert).toBe(false)
+    expect(document.querySelector('[data-dsh-mobile-navbar-host]')).toBeNull()
+    expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar-open')).toBe(false)
+
+    act(() => frame.setAttribute('data-rightbar-collapsed', ''))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeInstanceOf(SVGElement))
+    expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar')).toBe(true)
+    expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar-open')).toBe(false)
+    expect(ctx.layout.toggleSidebar).not.toHaveBeenCalled()
+    expect(ctx.layout.selectPanel).not.toHaveBeenCalled()
+  })
+
+  it('does not take ownership when the native rightbar is already visible', () => {
+    const { overlay } = setupFrame()
+    overlay.parentElement!.removeAttribute('data-rightbar-collapsed')
+    register()
+    renderOverlay(overlay)
+    expect(document.documentElement.hasAttribute('data-dsh-mobile-sidebar')).toBe(false)
+    expect(document.querySelector('[data-dsh-mobile-navbar-host]')).toBeNull()
+    expect(screen.queryByRole('navigation')).toBeNull()
+  })
+
   it('maps the host toggle command to the drawer and remains inactive on desktop', () => {
     setupFrame()
     const { dispose } = register()
