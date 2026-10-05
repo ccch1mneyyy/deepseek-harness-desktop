@@ -2,7 +2,7 @@
 
 [English](<./DEVELOPMENT.md>) · [中文](<./DEVELOPMENT.zh.md>) · [README](<../README.md>)
 
-Tauri 2 + React 19：前端位于 [`src/`](<../src/>)，Rust 后端位于 [`src-tauri/`](<../src-tauri/>)，插件位于 [`packages/`](<../packages/>)。当前桌面端：`0.20.0-beta.1`；推荐 Harness 内核：`0.2.0-rc.2`。
+Tauri 2 + React 19：前端位于 [`src/`](<../src/>)，Rust 后端位于 [`src-tauri/`](<../src-tauri/>)，插件位于 [`packages/`](<../packages/>)。当前桌面端：`0.22.1`；推荐 Harness 内核：`0.2.0-rc.2`。
 
 修改前先读 [AGENTS.md](<../AGENTS.md>) 与[路由规范](<./specs/devlopment.md>)。禁止查看受限归档目录，插件改动期间禁止执行构建。
 
