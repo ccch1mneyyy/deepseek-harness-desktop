@@ -133,8 +133,8 @@ export default c(`@media ${MOBILE_MEDIA_QUERIES.join(' and ')}`, [
   }),
   c('[data-dsh-mobile-sidebar-toggle]', {
     display: 'block',
-    width: '24px',
-    height: '24px',
+    width: '20px',
+    height: '20px',
     padding: '0',
     border: '0',
     color: 'var(--dsw-alias-label-primary)',
