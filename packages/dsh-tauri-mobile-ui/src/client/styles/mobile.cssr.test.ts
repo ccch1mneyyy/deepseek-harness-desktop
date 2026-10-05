@@ -117,21 +117,28 @@ describe('mobile conversation layout', () => {
     }
   })
 
-  it('renders the smaller sidebar toggle at 20px while retaining the 24px new-session icon', () => {
-    for (const [selector, size] of [
-      ['[data-dsh-mobile-sidebar-toggle]', '20px'],
-      ['[data-dsh-mobile-new-session]', '24px'],
-    ]) {
-      expect(declarations(selector)).toMatchObject({ width: size, height: size })
-      const rules: unknown[] = []
-      root.walkRules(selector, (rule) => {
-        rules.push(rule)
-        expect(rule.parent?.type).toBe('atrule')
-        if (rule.parent?.type === 'atrule')
-          expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
-      })
-      expect(rules).toHaveLength(1)
-    }
+  it('renders the mobile sidebar icon at 20px inside the touch media query', () => {
+    expect(declarations('[data-dsh-mobile-sidebar-toggle]')).toMatchObject({ width: '20px', height: '20px' })
+    const rules: unknown[] = []
+    root.walkRules('[data-dsh-mobile-sidebar-toggle]', (rule) => {
+      rules.push(rule)
+      expect(rule.parent?.type).toBe('atrule')
+      if (rule.parent?.type === 'atrule')
+        expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
+    })
+    expect(rules).toHaveLength(1)
+  })
+
+  it('keeps the new-session icon at 24px', () => {
+    expect(declarations('[data-dsh-mobile-new-session]')).toMatchObject({ width: '24px', height: '24px' })
+    const rules: unknown[] = []
+    root.walkRules('[data-dsh-mobile-new-session]', (rule) => {
+      rules.push(rule)
+      expect(rule.parent?.type).toBe('atrule')
+      if (rule.parent?.type === 'atrule')
+        expect(rule.parent.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
+    })
+    expect(rules).toHaveLength(1)
   })
 
   it('overrides conversation scroll bottom padding to zero inside the mobile media query', () => {

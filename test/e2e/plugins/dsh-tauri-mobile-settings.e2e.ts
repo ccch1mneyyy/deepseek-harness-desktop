@@ -23,6 +23,11 @@ async function openPhoneSettings(width: number, height: number) {
   })
   try {
     const toggle = app.frame.locator('[data-dsh-mobile-sidebar-toggle]')
+    const toggleBox = (await toggle.boundingBox())!
+    expect(
+      { width: Math.round(toggleBox.width), height: Math.round(toggleBox.height) },
+      '移动侧边栏图标必须按 20px 渲染，而不是回落到字形尺寸或旧的 24px',
+    ).toEqual({ width: 20, height: 20 })
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-expanded'), { message: '真实移动入口必须展开侧栏' }).toBe('true')
     const launcher = app.frame.locator(LAUNCHER)
