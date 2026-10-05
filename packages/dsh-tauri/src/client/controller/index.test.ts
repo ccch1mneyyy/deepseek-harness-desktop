@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createLifecycleController } from './index'
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe('createLifecycleController', () => {
   it('cancels only the selected registration and disposes the rest once in order', () => {
@@ -21,6 +24,27 @@ describe('createLifecycleController', () => {
     controller.add(() => calls.push('late'))()
     expect(controller.isDisposed()).toBe(true)
     expect(calls).toEqual(['middle', 'duplicate'])
+  })
+
+  it('removes window listeners on explicit and controller disposal', () => {
+    const controller = createLifecycleController()
+    const windowListeners = new Map<string, EventListener>()
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn((type: string, listener: EventListener) => windowListeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string, _listener: EventListener) => windowListeners.delete(type)),
+    })
+    const handler = vi.fn()
+    const remove = controller.listenWindow('resize', handler)
+
+    expect(windowListeners.has('resize')).toBe(true)
+    remove()
+    expect(windowListeners.has('resize')).toBe(false)
+    expect(window.removeEventListener).toHaveBeenCalledTimes(1)
+
+    controller.listenWindow('resize', handler)
+    controller.dispose()
+    expect(windowListeners.has('resize')).toBe(false)
+    expect(window.removeEventListener).toHaveBeenCalledTimes(2)
   })
 
   it('continues cleanup after a disposer throws', () => {

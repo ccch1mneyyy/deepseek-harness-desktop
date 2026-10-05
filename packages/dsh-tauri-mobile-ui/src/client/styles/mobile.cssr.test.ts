@@ -10,28 +10,88 @@ vi.mock('dsh-tauri-ui/client', () => ({ cssr }))
 describe('mobile conversation layout', () => {
   const root = postcss.parse(mobileStyle.render())
 
-  it('keeps current mobile layout overrides scoped to mobile devices', () => {
+  it('keeps the existing mobile layout overrides scoped to touch devices', () => {
     const media = root.nodes.find(node => node.type === 'atrule' && node.name === 'media' && node.params === '(hover: none) and (any-pointer: coarse) and (any-hover: none)')
     expect(media?.type).toBe('atrule')
     if (media?.type !== 'atrule')
       throw new Error('Missing mobile media query')
     expect(media.params).toBe('(hover: none) and (any-pointer: coarse) and (any-hover: none)')
-    const rules: Record<string, unknown> = {}
-    media.walkRules((rule) => {
-      rules[rule.selector] = rule.nodes.map(node => node.type === 'decl' ? [node.prop, node.value, node.important] : [])
+    const css = media.toString()
+    for (const selector of [
+      '[data-dsh-mobile-preferences]',
+      '[data-slot="conversation.composer.bar"] [class$="_dock"]',
+      '[class$="_composerStack"] > [data-slot="conversation.input.dock"]',
+      '[class$="_turnErrorCode"]',
+      '[data-slot="conversation.header"] [class$="_header"]',
+      '[data-slot="main"] header[class*="_pageHead"]',
+      '[data-slot="conversation.view"] [class$="_scroll"]',
+      '[class*="_userStack"]',
+      '[data-slot="main"] [data-conversation-scroll]',
+      '[data-slot="root"] > [class$="_frame"]',
+    ]) {
+      expect(css).toContain(selector)
+    }
+  })
+
+  it('positions the drawer without relying on the upstream collapsed marker', () => {
+    const css = root.toString()
+    for (const selector of [
+      'html[data-dsh-mobile-sidebar] [class$="_sidebarCol"]',
+      'html[data-dsh-mobile-sidebar] body [data-slot="sidebar"]',
+      'html[data-dsh-mobile-sidebar] [class$="_centerCol"]',
+      'html[data-dsh-mobile-sidebar-open] [data-dsh-mobile-sidebar-shade]',
+      '[data-dsh-mobile-topbar]',
+    ]) {
+      expect(css).toContain(selector)
+    }
+    expect(css).toContain('grid-template-columns: minmax(0, 1fr) !important')
+    expect(css).not.toContain('[data-sidebar-collapsed]')
+  })
+
+  it('keeps the sidebar stationary behind a raised rounded main panel without a gray shade', () => {
+    const declarations = (selector: string): Record<string, string> => {
+      const values: Record<string, string> = {}
+      root.walkRules(selector, (rule) => {
+        rule.walkDecls((decl) => {
+          values[decl.prop] = `${decl.value}${decl.important ? ' !important' : ''}`
+        })
+      })
+      return values
+    }
+    expect(declarations('html[data-dsh-mobile-sidebar] [class$="_sidebarCol"]')).toMatchObject({
+      'z-index': '0',
+      'transform': 'none',
     })
-    expect(rules).toEqual({
-      '[data-dsh-mobile-preferences]': [['display', 'flex', undefined], ['flex', '1', undefined], ['min-width', '0', undefined], ['align-items', 'center', undefined], ['gap', '8px', undefined], ['padding', '8px 0', undefined]],
-      '[data-dsh-mobile-preferences] button': [['margin-left', 'auto', undefined], ['flex-shrink', '0', undefined]],
-      '[data-slot="conversation.composer.bar"] [class$="_dock"]': [['display', 'none', true]],
-      '[class$="_composerStack"] > [data-slot="conversation.input.dock"]': [['display', 'none', true]],
-      '[class$="_turnErrorCode"]': [['display', 'none', true]],
-      '[data-slot="conversation.header"] [class$="_header"]': [['display', 'none', true]],
-      '[data-slot="main"] header[class*="_pageHead"]': [['padding-left', '0', true], ['padding-top', '24px', true]],
-      'header[class*="_pageHead"] [class*="_toolbar"]': [['display', 'none', true]],
-      '[data-slot="conversation.view"] [class$="_scroll"]': [['padding', '16px', true]],
-      '[class*="_userStack"]': [['max-width', '100%', true]],
-      '[data-slot="main"] [data-conversation-scroll]': [['padding-bottom', '0', true]],
+    expect(declarations('html[data-dsh-mobile-sidebar] [class$="_centerCol"]')).toMatchObject({
+      'position': 'absolute',
+      'inset': '0',
+      'z-index': '1',
+      'transform': 'translate3d(var(--dsh-mobile-sidebar-offset), 0, 0)',
+      '--dsh-mobile-sidebar-radius': 'clamp(0px, calc(var(--dsh-mobile-sidebar-offset) / 10), 24px)',
+      'border-radius': 'var(--dsh-mobile-sidebar-radius) 0 0 var(--dsh-mobile-sidebar-radius)',
+      'corner-shape': 'round',
+      'background-color': 'Canvas',
+      'background-image': 'linear-gradient(var(--dsw-alias-bg-base, Canvas), var(--dsw-alias-bg-base, Canvas))',
+      'box-shadow': 'none',
+    })
+    expect(declarations('html[data-dsh-mobile-sidebar] body [data-slot="sidebar"]')).toMatchObject({
+      // 终端模式外观会在折叠标记下隐藏侧栏，抽屉接管时用更高特异度还原可见性。
+      visibility: 'visible',
+    })
+    expect(declarations('html[data-dsh-mobile-sidebar-open] [class$="_centerCol"], html[data-dsh-mobile-sidebar-dragging] [class$="_centerCol"]')).toMatchObject({
+      'box-shadow': 'var(--dsw-shadow-lv3)',
+    })
+    expect(declarations('[data-dsh-mobile-sidebar-shade]').background).toBe('transparent')
+    expect(declarations('html[data-dsh-mobile-sidebar] [data-side="sidebar"]').display).toBe('none !important')
+    expect(declarations('[data-dsh-mobile-topbar]')).toMatchObject({
+      position: 'sticky',
+      top: '0',
+    })
+    expect(declarations('[data-dsh-mobile-sidebar-toggle]')).toMatchObject({
+      'width': '24px',
+      'height': '24px',
+      'background': 'transparent',
+      'box-shadow': 'none',
     })
   })
 

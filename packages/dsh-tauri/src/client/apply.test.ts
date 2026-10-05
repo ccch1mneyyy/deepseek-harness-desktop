@@ -66,7 +66,8 @@ function stubEnv(): Harness {
   vi.stubGlobal('document', {
     body: {},
     head,
-    documentElement: { style: { colorScheme: 'light' } },
+    // 移动抽屉归属标记挂在 documentElement 上，桌面假实现里始终未设置。
+    documentElement: { style: { colorScheme: 'light' }, hasAttribute: () => false },
     createElement: () => ({ setAttribute: () => {}, textContent: '', parentElement: head }),
     querySelector: () => null,
     querySelectorAll: () => [],

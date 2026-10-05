@@ -36,7 +36,6 @@ it('owns mobile styles and composer activation until unload, and can reload clea
       '[class$="_turnErrorCode"]',
       '[data-slot="conversation.header"] [class$="_header"]',
       '[data-slot="main"] header[class*="_pageHead"]',
-      'header[class*="_pageHead"] [class*="_toolbar"]',
       '[data-slot="conversation.view"] [class$="_scroll"]',
       '[class*="_userStack"]',
       '[data-slot="main"] [data-conversation-scroll]',
