@@ -130,7 +130,7 @@ export async function addSessionCookie(context: BrowserContext): Promise<void> {
 async function installEmbedRoute(page: Page, viewport: { width: number, height: number }): Promise<void> {
   const embedUrl = `${inject('dshBaseUrl')}${EMBEDDED_DOCUMENT_PATH}`
   const htmlContent = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;overflow:hidden">`
-    + `<iframe id="dsh" src="/" style="width:${viewport.width}px;height:${viewport.height}px;border:0"></iframe>`
+    + `<iframe id="dsh" src="/" style="display:block;width:${viewport.width}px;height:${viewport.height}px;border:0"></iframe>`
     + '</body></html>'
 
   await page.route(embedUrl, route =>

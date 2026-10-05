@@ -53,6 +53,13 @@ describe('mobile settings official host composition', () => {
       expect(await dialog.evaluate(el => document.getElementById(el.getAttribute('aria-labelledby')!)?.textContent?.trim()), '保留官方对话框可访问名称').toBe('设置')
       expect(await options.evaluate(el => ({ hidden: el.hasAttribute('hidden'), inert: el.hasAttribute('inert') })), '分类页必须使原生详情不可聚焦').toEqual({ hidden: true, inert: true })
       expect(await controls.isVisible(), '分类页不显示详情返回按钮').toBe(false)
+      expect(await app.page.evaluate(() => ({
+        width: document.documentElement.scrollWidth,
+        height: document.documentElement.scrollHeight,
+        x: window.scrollX,
+        y: window.scrollY,
+      })), '嵌入驱动不能产生基线空隙或父页滚动来偏移原生全屏对话框').toEqual({ width, height, x: 0, y: 0 })
+      expect(await app.page.locator('#dsh').boundingBox(), '被测 iframe 必须与手机视口原点及尺寸对齐').toEqual({ x: 0, y: 0, width, height })
       const menuBox = await dialog.boundingBox()
       expect(menuBox, '分类页必须有真实手机全屏几何').not.toBeNull()
       expect(menuBox!.x).toBeCloseTo(0)
