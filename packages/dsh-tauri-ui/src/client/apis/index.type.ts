@@ -9,5 +9,4 @@ export type UngroupedResponse = {
 
 export interface PostSessionResumeBody {
   sessionId?: string;
-  recoverFromSessionId?: string;
 }

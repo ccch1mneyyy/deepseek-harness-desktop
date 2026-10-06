@@ -9,40 +9,22 @@ export interface ComposerSessionSnapshot {
   subagent?: unknown
 }
 
-export interface ComposerTurnEndReason {
-  kind?: string
-  error?: {
-    code?: unknown
-    message?: unknown
-    status?: unknown
-  }
-}
-
-export interface ComposerSessionEvent {
-  type?: string
-  seq?: number
-  data?: {
-    id?: unknown
-    turn?: unknown
-    inserted?: readonly { id?: unknown }[]
-    reason?: ComposerTurnEndReason
-  }
-}
-
 export interface ComposerSessionEventEntry {
   type?: string
-  event?: ComposerSessionEvent
+  event?: {
+    type?: string
+    data?: { reason?: { kind?: string } }
+  }
 }
 
 export interface ComposerSessionEventSource {
   subscribe: (listener: () => void) => () => void
-  getSnapshot: () => { entries?: readonly ComposerSessionEventEntry[], hasMore?: boolean }
+  getSnapshot: () => { entries?: readonly ComposerSessionEventEntry[] }
 }
 
 export interface ComposerSession {
   subscribe?: (listener: () => void) => () => void
   getSnapshot?: () => ComposerSessionSnapshot
-  loadOlder?: () => Promise<void>
 }
 
 export interface ComposerSessionBinding {
@@ -53,11 +35,9 @@ export interface ComposerSessionBinding {
 export interface ComposerSessionsRuntime {
   list?: ComposerListProjection
   binding?: (sessionId: string) => unknown
-  fork?: (options: { sessionId: string, atSeq: number, increaseTitle: boolean }) => Promise<string>
 }
 
 export interface ComposerIconState {
   path: string | null
   ariaLabel: string | null
-  title: string | null
 }

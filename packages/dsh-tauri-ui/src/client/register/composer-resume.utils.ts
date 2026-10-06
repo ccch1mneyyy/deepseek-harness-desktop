@@ -1,6 +1,4 @@
-import type { ComposerIconState, ComposerSessionEventEntry, ComposerSessionSnapshot, ComposerTurnEndReason } from './composer-resume.types'
-
-export { contentRiskRecoveryBoundary } from '../../shared/content-risk'
+import type { ComposerIconState, ComposerSessionEventEntry, ComposerSessionSnapshot } from './composer-resume.types'
 
 const PLAY_FILL_PATH = 'M14.642 6.285c1.294.777 1.294 2.653 0 3.43l-9.113 5.468c-1.333.8-3.028-.16-3.029-1.715V2.532C2.5.978 4.196.018 5.53.818z'
 
@@ -18,14 +16,14 @@ export function isComposerEmpty(card: Element): boolean {
   return card.querySelector(COMPOSER_PLACEHOLDER_SELECTOR) !== null
 }
 
-export function lastTurnEndReason(entries: readonly ComposerSessionEventEntry[] | undefined): ComposerTurnEndReason | undefined {
+export function lastTurnEndKind(entries: readonly ComposerSessionEventEntry[] | undefined): string | undefined {
   if (entries === undefined)
     return undefined
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const event = entries[index]?.event
     if (event?.type !== 'turn/end')
       continue
-    return event.data?.reason
+    return event.data?.reason?.kind
   }
   return undefined
 }
@@ -45,7 +43,7 @@ export function shouldOfferResume(input: {
   const session = input.session
   if (session === undefined || session.running === true || session.removed === true)
     return false
-  return isResumableTurnEnd(lastTurnEndReason(input.entries)?.kind)
+  return isResumableTurnEnd(lastTurnEndKind(input.entries))
 }
 
 export function restoreDisabled(composerEmpty: boolean, running: boolean, hasSubagent: boolean): boolean {
@@ -61,8 +59,6 @@ export function paintResumeIcon(button: HTMLButtonElement, label: string): void 
     button.disabled = false
   if (button.getAttribute('aria-label') !== label)
     button.setAttribute('aria-label', label)
-  if (button.getAttribute('title') !== label)
-    button.setAttribute('title', label)
 
   if (svg)
     svg.style.width = '14px'
@@ -82,12 +78,6 @@ export function restorePrimaryIcon(
       button.removeAttribute('aria-label')
     else
       button.setAttribute('aria-label', state.ariaLabel)
-  }
-  if (button.getAttribute('title') === options.label) {
-    if (state.title === null)
-      button.removeAttribute('title')
-    else
-      button.setAttribute('title', state.title)
   }
   if (options.disabled)
     button.disabled = true
