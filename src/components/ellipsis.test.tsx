@@ -13,13 +13,13 @@ function hoverTrigger(trigger: HTMLElement) {
 }
 
 describe('ellipsis tooltip', () => {
-  it('溢出放行时 hover 立即打开 tooltip，并与触发器互相引用', () => {
+  it('溢出放行时 hover 在 500ms 延迟后打开 tooltip，并与触发器互相引用', async () => {
     render(<Ellipsis forceTooltip>a very long truncated line</Ellipsis>)
     const trigger = screen.getByRole('button')
 
     hoverTrigger(trigger)
 
-    const tooltip = screen.getByRole('tooltip')
+    const tooltip = await screen.findByRole('tooltip', undefined, { timeout: 2000 })
     expect(tooltip.textContent).toContain('a very long truncated line')
     expect(trigger.getAttribute('aria-describedby')).toBe(tooltip.id)
   })
