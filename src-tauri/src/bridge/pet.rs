@@ -65,6 +65,11 @@ pub struct PetStatus {
     pub active_pet: String,
     /// 宠物大小百分比（50–200，100 = 精灵图原始尺寸）；None = 未设置（默认 100）。
     pub pet_size: Option<f64>,
+    /// 是否允许抛射（拖拽甩出后飞行、撞屏幕边缘回弹）；默认关闭。
+    ///
+    /// 经 `pet://status` 广播给 pet 窗口，由窗口侧的物理层决定是否响应释放速度
+    /// （issue #930）。
+    pub throw_enabled: bool,
 }
 
 /// 文件系统宠物的数据来源。
@@ -163,6 +168,7 @@ fn status_from_setting(setting: &config::Setting, default_id: &str) -> PetStatus
         visible: setting.pet_enabled,
         active_pet: normalize_active_pet(setting.active_pet.as_deref(), default_id),
         pet_size: setting.pet_size,
+        throw_enabled: setting.throw_enabled,
     }
 }
 
@@ -287,6 +293,20 @@ pub fn set_pet_size(app: AppHandle, size: f64) -> Result<PetStatus, String> {
     // Rust 不再绕开前端重复 set_size，避免内置鲸鱼（16:9）与自定义图集比例不一致时被
     // 两处高度交替重设，造成大小变更时上下闪烁（issue #308）。DPI 变化仍由 Rust 的
     // ScaleFactorChanged 分支按当前宠物比例重设。
+    let status = status_from_setting(&updated, &default_active_pet(&app));
+    emit_pet_status(&app, &status);
+    Ok(status)
+}
+
+/// 启用/关闭抛射能力（设置页 Switch，默认关闭，issue #930）。
+///
+/// 与 [`set_pet_size`] 同形：只落盘 + 广播状态，不做窗口操作——抛射完全是 pet WebView
+/// 内的物理层行为，窗口侧收到 `pet://status` 立即生效，无需重启。
+#[tauri::command]
+pub fn set_pet_throw_enabled(app: AppHandle, enabled: bool) -> Result<PetStatus, String> {
+    let updated = config::update_store_dat_setting(&app, |setting| {
+        setting.throw_enabled = enabled;
+    });
     let status = status_from_setting(&updated, &default_active_pet(&app));
     emit_pet_status(&app, &status);
     Ok(status)
@@ -1551,6 +1571,21 @@ mod tests {
         assert!(!status.enabled);
         assert!(!status.visible);
         assert_eq!(status.active_pet, "");
+    }
+
+    #[test]
+    fn throw_defaults_off_and_follows_the_setting() {
+        let default_status = status_from_setting(&config::Setting::default(), "");
+        assert!(
+            !default_status.throw_enabled,
+            "抛射必须默认关闭（issue #930）"
+        );
+
+        let enabled = config::Setting {
+            throw_enabled: true,
+            ..Default::default()
+        };
+        assert!(status_from_setting(&enabled, "").throw_enabled);
     }
 
     #[test]

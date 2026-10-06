@@ -28,6 +28,9 @@ vi.mock('dsh-tauri-ui/client', () => ({
       {['pets', 'codex'].map(tab => <button key={tab} aria-pressed={value === tab} onClick={() => onChange(tab)}>{tab}</button>)}
     </div>
   ),
+  Switch: ({ checked, label, onChange }: { checked: boolean, label: string, onChange: (next: boolean) => void }) => (
+    <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}>{label}</button>
+  ),
 }))
 
 vi.mock('../service/pet', () => ({
@@ -42,6 +45,7 @@ vi.mock('../service/pet', () => ({
   resizePet: vi.fn(),
   toggleForceXwayland: vi.fn(),
   togglePet: vi.fn(),
+  togglePetThrow: vi.fn(),
 }))
 
 let container: HTMLDivElement
@@ -85,7 +89,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.resetAllMocks()
   Object.assign(store.pet.$state, {
-    status: { active_pet: 'chat', enabled: false, visible: false },
+    status: { active_pet: 'chat', enabled: false, visible: false, throw_enabled: false },
     fetchRevision: 0,
     catalogLoaded: true,
     presetPets: [{ id: 'preset', name: 'Preset', desc: 'Preset description', image: 'preset.gif' }],
@@ -95,7 +99,7 @@ beforeEach(() => {
     overlaySupported: false,
     forceXwayland: false,
   })
-  for (const action of [petService.loadPetCatalog, petService.choosePet, petService.clearPetSelection, petService.enablePet, petService.togglePet, petService.toggleForceXwayland, petService.resizePet, petService.importPetArchive, petService.openCommunityShare])
+  for (const action of [petService.loadPetCatalog, petService.choosePet, petService.clearPetSelection, petService.enablePet, petService.togglePet, petService.toggleForceXwayland, petService.resizePet, petService.togglePetThrow, petService.importPetArchive, petService.openCommunityShare])
     vi.mocked(action).mockResolvedValue({ ok: true })
   container = document.createElement('div')
   document.body.append(container)
@@ -174,6 +178,33 @@ describe('pet settings action boundaries', () => {
     await click(button(locale.text('xwaylandEnable')))
     expect(petService.toggleForceXwayland).toHaveBeenCalledExactlyOnceWith({ enabled: true })
     expect(container.textContent).toContain(locale.text('xwaylandRestart'))
+  })
+
+  it('throw switch defaults off, sends the flipped value and follows the authoritative status', async () => {
+    await mount()
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    expect(toggle.textContent).toBe(locale.text('throwLabel'))
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    await click(toggle)
+    expect(petService.togglePetThrow).toHaveBeenCalledExactlyOnceWith({ enabled: true })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      store.pet.setStatus({ active_pet: 'chat', enabled: false, visible: false, throw_enabled: true })
+    })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    await click(toggle)
+    expect(petService.togglePetThrow).toHaveBeenLastCalledWith({ enabled: false })
+  })
+
+  it('throw switch shows its own failure without flipping the local state', async () => {
+    vi.mocked(petService.togglePetThrow).mockResolvedValueOnce({ ok: false, error: 'native failure' })
+    await mount()
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    await click(toggle)
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(locale.text('throwFailed'))
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    await click(toggle)
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
   it('default size remains interactive during other busy actions and sends each changed value', async () => {

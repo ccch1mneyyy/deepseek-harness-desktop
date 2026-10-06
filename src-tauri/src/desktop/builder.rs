@@ -1584,6 +1584,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::set_pet_enabled,
         crate::bridge::set_active_pet,
         crate::bridge::set_pet_size,
+        crate::bridge::set_pet_throw_enabled,
         crate::bridge::push_pet_session,
         crate::bridge::move_pet_window,
         crate::bridge::persist_pet_window_position,

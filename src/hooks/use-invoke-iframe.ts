@@ -49,6 +49,7 @@ const ALLOWED_INVOKE_CMDS = new Set([
   'set_pet_enabled',
   'set_active_pet',
   'set_pet_size',
+  'set_pet_throw_enabled',
   'push_pet_session',
   'list_pets',
   'import_pet',

@@ -13,6 +13,7 @@ import {
   CMD_SET_FORCE_XWAYLAND,
   CMD_SET_PET_ENABLED,
   CMD_SET_PET_SIZE,
+  CMD_SET_PET_THROW_ENABLED,
   PET_COMMUNITY_URL,
   PET_HATCH_PROMPT,
 } from '../constants'
@@ -166,6 +167,19 @@ export async function toggleForceXwayland(input: { enabled: boolean }): Promise<
 export async function resizePet(input: { size: number }): Promise<PetActionResult> {
   return guard('resize pet', async () => {
     store.pet.setStatus(await invoke<PetStatus>(CMD_SET_PET_SIZE, { size: input.size }))
+    return { ok: true }
+  })
+}
+
+/**
+ * Action：开关抛射能力（拖拽甩出后飞行、撞屏幕边缘回弹）。
+ *
+ * 与 `togglePet` 同形：命令回吐权威状态，前端不做乐观本地副本；抛射开关经
+ * `pet://status` 广播给桌宠窗口，立即生效。
+ */
+export async function togglePetThrow(input: { enabled: boolean }): Promise<PetActionResult> {
+  return guard('toggle pet throw', async () => {
+    store.pet.setStatus(await invoke<PetStatus>(CMD_SET_PET_THROW_ENABLED, { enabled: input.enabled }))
     return { ok: true }
   })
 }

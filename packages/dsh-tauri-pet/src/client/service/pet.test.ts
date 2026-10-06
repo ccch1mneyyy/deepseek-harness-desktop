@@ -17,6 +17,7 @@ import {
   resizePet,
   toggleForceXwayland,
   togglePet,
+  togglePetThrow,
 } from './pet'
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -26,7 +27,7 @@ vi.mock('dsh-tauri/client', async () => ({
   invoke,
 }))
 
-const status: PetStatus = { active_pet: 'chat-a', enabled: true, visible: true, pet_size: 100 }
+const status: PetStatus = { active_pet: 'chat-a', enabled: true, visible: true, pet_size: 100, throw_enabled: true }
 
 function adapter(): ClientAdapter {
   return {
@@ -113,6 +114,7 @@ describe('pet service native command contracts', () => {
     { action: () => choosePet({ id: 'chosen' }), call: ['set_active_pet', { id: 'chosen' }] },
     { action: () => togglePet({ enabled: false }), call: ['set_pet_enabled', { enabled: false }] },
     { action: () => resizePet({ size: 160 }), call: ['set_pet_size', { size: 160 }] },
+    { action: () => togglePetThrow({ enabled: true }), call: ['set_pet_throw_enabled', { enabled: true }] },
   ])('status action forwards $call and stores the authoritative result', async ({ action, call }) => {
     invoke.mockResolvedValue(status)
     expect(await action()).toEqual({ ok: true })
@@ -194,6 +196,7 @@ describe('pet service native command contracts', () => {
     { label: 'enable pet', action: () => enablePet({ id: 'chosen' }) },
     { label: 'toggle pet', action: () => togglePet({ enabled: true }) },
     { label: 'toggle force xwayland', action: () => toggleForceXwayland({ enabled: true }) },
+    { label: 'toggle pet throw', action: () => togglePetThrow({ enabled: true }) },
     { label: 'resize pet', action: () => resizePet({ size: 140 }) },
     { label: 'import pet', action: () => importPetArchive({ name: 'bad.zip', data: 'bad' }) },
     { label: 'open community share', action: openCommunityShare },

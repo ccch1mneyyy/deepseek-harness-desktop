@@ -90,6 +90,20 @@ function dragWindow(clock: { now: number }, samples: Array<{ t: number, x: numbe
   }
 }
 
+/** 一次完整的「抓取 → 高速拖拽 → 松手」手势（5000 CSS px/s，远超 500 的甩出门槛）。 */
+function flingGesture(controls: PetPhysicsControls, clock: { now: number }): void {
+  const start = clock.now
+  grab(controls)
+  dragWindow(clock, [
+    { t: start, x: 1000, y: 500 },
+    { t: start + 40, x: 1200, y: 500 },
+    { t: start + 80, x: 1400, y: 500 },
+    { t: start + 120, x: 1600, y: 500 },
+  ])
+  clock.now = start + 121
+  pressMouse(false)
+}
+
 describe('usePetPhysics', () => {
   const clock = { now: 0 }
 
@@ -120,7 +134,7 @@ describe('usePetPhysics', () => {
 
   it('抓住宠物后松开左键，按窗口轨迹估速并请求组件甩出，轨迹随下一次抓取清空', () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     grab(result.current)
     dragWindow(clock, [
@@ -145,7 +159,7 @@ describe('usePetPhysics', () => {
 
   it('宿主转来的命中箱松开结算一次甩动，设备流的同一次松开不再重复结算', () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     grab(result.current)
     dragWindow(clock, [
@@ -172,7 +186,7 @@ describe('usePetPhysics', () => {
 
   it('没有抓取时的松开是空操作：清状态不会凭空甩出宠物', () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     dragWindow(clock, [
       { t: 0, x: 1000, y: 500 },
@@ -188,7 +202,7 @@ describe('usePetPhysics', () => {
 
   it('窗口几乎没动（低于 500 CSS px/s）的松手不甩', () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     grab(result.current)
     dragWindow(clock, [
@@ -203,7 +217,7 @@ describe('usePetPhysics', () => {
 
   it('飞行逐帧移动窗口，落地时触发挤压动画并停在地板上', async () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     act(() => {
       result.current.onFling(flingEvent(600, 0))
@@ -226,7 +240,7 @@ describe('usePetPhysics', () => {
 
   it('飞行中在别处点击（全屏左键按下）不停窗口，也不会被当成甩动', async () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     act(() => {
       result.current.onFling(flingEvent(600, 0))
@@ -247,7 +261,7 @@ describe('usePetPhysics', () => {
 
   it('抓住宠物（命中箱按下）立刻停住飞行，不等落地', async () => {
     const pet = createPet()
-    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex'))
+    const { result } = renderHook(() => usePetPhysics(pet.ref, 'codex', true))
 
     act(() => {
       result.current.onFling(flingEvent(600, 0))
@@ -260,5 +274,20 @@ describe('usePetPhysics', () => {
     advanceFrames(10)
 
     expect(mocks.window.setPosition).toHaveBeenCalledTimes(calls)
+  })
+
+  it('抛射关闭（默认）时松手不请求甩出，重新开启后同一次手势照常甩出', () => {
+    const pet = createPet()
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => usePetPhysics(pet.ref, 'codex', enabled),
+      { initialProps: { enabled: false } },
+    )
+
+    flingGesture(result.current, clock)
+    expect(pet.fling).not.toHaveBeenCalled()
+
+    rerender({ enabled: true })
+    flingGesture(result.current, clock)
+    expect(pet.fling).toHaveBeenCalledTimes(1)
   })
 })

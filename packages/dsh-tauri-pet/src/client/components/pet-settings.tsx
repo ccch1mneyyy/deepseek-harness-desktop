@@ -1,6 +1,6 @@
 import type { ChangeEvent, ReactElement } from 'react'
 import type { PetActionResult, PetListItem } from '../service/pet.types'
-import { ArrowRightFromSquare, Button, Globe, Icon, Plus, SegmentedControl } from 'dsh-tauri-ui/client'
+import { ArrowRightFromSquare, Button, Globe, Icon, Plus, SegmentedControl, Switch } from 'dsh-tauri-ui/client'
 import { useStore, useWatchImmediate } from 'dsh-tauri/client'
 import { useEffect, useId, useRef, useState } from 'react'
 import { PET_DEFAULT_SIZE, PET_SIZE_MAX, PET_SIZE_MIN, PET_SIZE_STEP } from '../constants'
@@ -17,6 +17,7 @@ import {
   resizePet,
   toggleForceXwayland,
   togglePet,
+  togglePetThrow,
 } from '../service/pet'
 import { store } from '../store'
 import { PetCard } from './pet-card'
@@ -62,6 +63,7 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
   const enabled = Boolean(status?.enabled)
   const active = status?.active_pet ?? ''
   const statusSize = status?.pet_size ?? PET_DEFAULT_SIZE
+  const throwEnabled = Boolean(status?.throw_enabled)
 
   // 宿主侧尺寸变化同步到本地滑条，正在拖动的本地值不被覆盖。
   useWatchImmediate(statusSize, () => {
@@ -123,6 +125,11 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
 
   async function toggleEnabled(): Promise<void> {
     await run(() => togglePet({ enabled: !enabled }), 'toggleFailed')
+  }
+
+  /** 切换抛射：关闭（默认）时宠物松手即停，不再飞行与撞边回弹（issue #930）。 */
+  async function toggleThrow(): Promise<void> {
+    await run(() => togglePetThrow({ enabled: !throwEnabled }), 'throwFailed')
   }
 
   /** 切换「强制 XWayland」：应用全局设置，下次启动生效。 */
@@ -348,6 +355,15 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
         />
       </div>
       <p className="m-0 text-[12px] leading-[18px] text-secondary">{locale.text('sizeHint')}</p>
+      <div className="flex items-center justify-between gap-[12px]">
+        <span className="flex-none font-medium">{locale.text('throwLabel')}</span>
+        <Switch
+          checked={throwEnabled}
+          label={locale.text('throwLabel')}
+          onChange={() => { void toggleThrow() }}
+        />
+      </div>
+      <p className="m-0 text-[12px] leading-[18px] text-secondary">{locale.text('throwHint')}</p>
     </div>
   )
 }
