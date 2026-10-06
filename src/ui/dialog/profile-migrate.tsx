@@ -188,7 +188,7 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                   <InputGroup fullWidth variant="secondary" className="relative">
                     <InputGroup.Input disabled className="min-w-0" value={target?.name ?? ''} />
                     <InputGroup.Suffix className="absolute right-0">
-                      <Chip className="rounded-sm" color="success" variant="soft">{coreVersion}</Chip>
+                      <Chip color="success" variant="soft">{coreVersion}</Chip>
                     </InputGroup.Suffix>
                   </InputGroup>
                 </div>
