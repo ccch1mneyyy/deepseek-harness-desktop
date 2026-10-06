@@ -105,6 +105,8 @@ export interface MigrationDataItem {
   kind: MigrationDataKind
   /** 条目数；凭据等无「条数」概念的一项缺省 */
   count?: number
+  /** 目标档案已完全包含：迁移是空操作，界面禁用勾选 */
+  covered: boolean
 }
 
 /** Rust 侧 service::profile::migrate::MigrationAnalysis 的序列化形态 */

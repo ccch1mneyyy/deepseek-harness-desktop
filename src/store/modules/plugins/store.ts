@@ -19,7 +19,6 @@ import { invoke } from '@tauri-apps/api/core'
 import i18next from 'i18next'
 import { defineStore } from 'valtio-define'
 import { toast } from '@/utils/toast'
-import { harness } from '../harness'
 import { onPluginsManagerEvent, triggerPluginsManagerEvent } from './events'
 import { enrichInstalled, normalizeRef, normalizeRefs, parseBlockedRefusal, parseUpdateFailures, refusalNames } from './utils'
 
@@ -568,10 +567,10 @@ export const plugins = defineStore({
         return
       const pending = this.queueResults
       this.queueResults = []
-      this.presentQueueResults(pending, group)
+      this.presentQueueResults(pending)
     },
 
-    presentQueueResults(results: PluginProcessResult[], group: PluginGroup): void {
+    presentQueueResults(results: PluginProcessResult[]): void {
       if (results.length === 0)
         return
       const succeeded = results.filter(result => result.ok).length
@@ -585,17 +584,6 @@ export const plugins = defineStore({
           && result.reason !== 'cancelled'
           && result.reason !== 'rejected',
       ).length
-      const restart = group.options.restartOnSettle && succeeded > 0
-      // 需要重启时把「重启」按钮挂在结果气泡上：一次操作只留一条。单独再弹一条常驻的重启提示
-      // 会和结果提示同时出现，用户看到的就是「两个 toast 说同一件事」。
-      let restartKey = ''
-      const restartAction = {
-        children: i18next.t('app.restart'),
-        onPress: () => {
-          toast.close(restartKey)
-          void harness.restart()
-        },
-      }
       if (results.length === 1) {
         const [result] = results
         // 用户自己的选择（取消 / 拒绝授权）不再补一条错误提示追问他；其余结果无论成败都要
@@ -606,13 +594,9 @@ export const plugins = defineStore({
           result.ok ? RESULT_SUCCESS[result.process.type] : RESULT_FAILED[result.process.type],
           { name: result.process.name },
         )
-        restartKey = toast(
+        toast(
           title,
-          result.ok
-            ? restart
-              ? { variant: 'accent', timeout: 0, actionProps: restartAction }
-              : { variant: 'default' }
-            : { variant: 'danger', description: result.error },
+          result.ok ? { variant: 'default' } : { variant: 'danger', description: result.error },
         )
         return
       }
@@ -624,11 +608,9 @@ export const plugins = defineStore({
       // 每一项都是用户自己的选择时没有任何收支可报，别弹一条空汇总气泡追问他。
       if (parts.length === 0)
         return
-      restartKey = toast(i18next.t('plugins.queue_summary'), {
+      toast(i18next.t('plugins.queue_summary'), {
         description: parts.join(' · '),
-        variant: failed > 0 ? 'danger' : restart ? 'accent' : 'default',
-        timeout: restart ? 0 : undefined,
-        actionProps: restart ? restartAction : undefined,
+        variant: failed > 0 ? 'danger' : 'default',
       })
     },
 

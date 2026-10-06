@@ -1,5 +1,5 @@
 import type { PropsWithOverlays } from '@overlastic/react'
-import type { HarnessCore, MigrateReport, MigrationAnalysis, MigrationDataKind, MigrationVerdict, Profile } from '@/types'
+import type { HarnessCore, MigrateReport, MigrationAnalysis, MigrationDataKind, MigrationEntry, MigrationVerdict, Profile } from '@/types'
 import { ArrowDown, ArrowRight, ArrowUp } from '@gravity-ui/icons'
 import { AlertDialog, Button, Checkbox, Chip, InputGroup, ListBox, Select, Spinner, Tabs } from '@heroui/react'
 import { useDisclosure } from '@overlastic/react'
@@ -83,11 +83,29 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
   const installedMap = new Map(manager.installed.map(p => [p.id, p.version]))
   const dataItemMap = new Map(dataItems.map(item => [item.kind, item]))
 
-  // 筛选已选中的插件与数据项
-  const pickedPlugins = plugins.filter(entry => pluginOverrides[entry.id] ?? true)
-  const pickedData = DATA_ORDER.filter(kind =>
-    dataOverrides[kind] ?? (dataItemMap.has(kind) && kind !== 'credentials'),
-  )
+  /** 有迁移价值：同名插件未装、档案数据未被当前档案完全包含 */
+  function pluginMigratable(entry: MigrationEntry): boolean {
+    return !installedMap.has(entry.id)
+  }
+
+  function dataMigratable(kind: MigrationDataKind): boolean {
+    const item = dataItemMap.get(kind)
+    return item !== undefined && !item.covered
+  }
+
+  /** 勾选状态：不可迁移的一律不选；用户显式切换过的一律以用户为准 */
+  function pluginPicked(entry: MigrationEntry): boolean {
+    return pluginMigratable(entry) && (pluginOverrides[entry.id] ?? true)
+  }
+
+  /** 凭据可能含敏感信息，默认不勾选 */
+  function dataPicked(kind: MigrationDataKind): boolean {
+    return dataMigratable(kind) && (dataOverrides[kind] ?? kind !== 'credentials')
+  }
+
+  const pickedPlugins = plugins.filter(pluginPicked)
+  const pickedData = DATA_ORDER.filter(dataPicked)
+  const hasCandidate = plugins.some(pluginMigratable) || DATA_ORDER.some(dataMigratable)
 
   // 5. 使用 useMutation 封装迁移提交流程
   const { mutate: handleMigrate, isPending: busy } = useMutation({
@@ -119,19 +137,17 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
         failed = results.filter(result => !result.ok).length
       }
 
-      return { totalCount: specs.length + kinds.length, failedCount: failed }
+      return { totalCount: specs.length + kinds.length, specCount: specs.length, failedCount: failed }
     },
-    onSuccess: ({ totalCount, failedCount }) => {
+    onSuccess: ({ totalCount, specCount, failedCount }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins })
 
       if (failedCount > 0) {
         toast(t('profiles.migrate_plugin_failed', { count: failedCount }), { variant: 'danger' })
       }
-      else {
-        toast(t('profiles.migrate_success', { count: totalCount }), {
-          variant: 'accent',
-          description: t('profiles.migrate_success_hint'),
-        })
+      // 装了插件的那一半由插件管理器的结果气泡负责提示，这里只在纯数据迁移时补一条
+      else if (specCount === 0) {
+        toast(t('profiles.migrate_success', { count: totalCount }), { variant: 'accent' })
       }
       disclosure.confirm()
     },
@@ -211,7 +227,10 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                 <If cond={!isLoading && error !== null}>
                   <p className="p-4 text-sm text-danger">{t('profiles.migrate_analyze_failed')}</p>
                 </If>
-                <If cond={!isLoading && error === null}>
+                <If cond={!isLoading && error === null && !hasCandidate}>
+                  <p className="py-4 text-sm text-muted">{t('profiles.migrate_nothing')}</p>
+                </If>
+                <If cond={!isLoading && error === null && hasCandidate}>
                   <Tabs defaultSelectedKey="plugins" variant="primary">
                     <Tabs.ListContainer>
                       <Tabs.List aria-label={t('profiles.migrate_title')}>
@@ -233,15 +252,15 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                         then={<p className="py-4 text-sm text-muted">{t('profiles.migrate_plugins_empty')}</p>}
                         else={plugins.map((entry) => {
                           const currentVersion = installedMap.get(entry.id)
+                          const installed = !pluginMigratable(entry)
                           const chip = VERDICT_CHIPS[entry.verdict]
                           const chipText = entry.targetVersion ? t(chip.key, { version: entry.targetVersion }) : t(chip.key)
-                          const isPicked = pluginOverrides[entry.id] ?? true
 
                           return (
                             <div key={entry.id} className="flex justify-between items-center py-1.5">
                               <Checkbox
-                                isSelected={isPicked}
-                                isDisabled={busy}
+                                isSelected={pluginPicked(entry)}
+                                isDisabled={busy || installed}
                                 onChange={(value: boolean) => setPluginOverrides(prev => ({ ...prev, [entry.id]: value }))}
                                 aria-label={entry.id}
                                 className="shrink-0"
@@ -259,30 +278,32 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                               </Checkbox>
 
                               <div className="flex items-center gap-2">
-                                <If cond={currentVersion !== undefined}>
+                                <If cond={installed}>
                                   <Chip size="sm" variant="soft">
-                                    {t('profiles.migrate_installed', { version: currentVersion })}
+                                    {t('profiles.migrate_installed', { version: currentVersion ?? '' })}
                                   </Chip>
                                 </If>
 
-                                <If
-                                  cond={entry.targetVersion !== undefined}
-                                  then={(
-                                    <Chip size="sm" color={chip.color} variant="soft" aria-label={chipText}>
-                                      <If
-                                        cond={entry.verdict === 'upgrade'}
-                                        then={<ArrowUp className="size-2.5" />}
-                                        else={<ArrowDown className="size-2.5" />}
-                                      />
-                                      {entry.targetVersion}
-                                    </Chip>
-                                  )}
-                                  else={(
-                                    <Chip size="sm" color={chip.color} variant="soft">
-                                      {chipText}
-                                    </Chip>
-                                  )}
-                                />
+                                <If cond={!installed}>
+                                  <If
+                                    cond={entry.targetVersion !== undefined}
+                                    then={(
+                                      <Chip size="sm" color={chip.color} variant="soft" aria-label={chipText}>
+                                        <If
+                                          cond={entry.verdict === 'upgrade'}
+                                          then={<ArrowUp className="size-2.5" />}
+                                          else={<ArrowDown className="size-2.5" />}
+                                        />
+                                        {entry.targetVersion}
+                                      </Chip>
+                                    )}
+                                    else={(
+                                      <Chip size="sm" color={chip.color} variant="soft">
+                                        {chipText}
+                                      </Chip>
+                                    )}
+                                  />
+                                </If>
                               </div>
                             </div>
                           )
@@ -295,14 +316,14 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                       {DATA_ORDER.map((kind) => {
                         const item = dataItemMap.get(kind)
                         const hasItem = item !== undefined
-                        const isPicked = dataOverrides[kind] ?? (hasItem && kind !== 'credentials')
+                        const covered = item?.covered ?? false
                         const labelText = t(DATA_LABEL_KEYS[kind], { count: item?.count ?? '0' })
 
                         return (
                           <div key={kind} className="flex items-center justify-between py-1.5">
                             <Checkbox
-                              isSelected={isPicked}
-                              isDisabled={busy || !hasItem}
+                              isSelected={dataPicked(kind)}
+                              isDisabled={busy || !dataMigratable(kind)}
                               onChange={(value: boolean) => setDataOverrides(prev => ({ ...prev, [kind]: value }))}
                               aria-label={kind}
                             >
@@ -321,6 +342,9 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
 
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted">{labelText}</span>
+                              <If cond={covered}>
+                                <span className="text-xs text-muted">{t('profiles.migrate_data_covered')}</span>
+                              </If>
                               <If cond={kind === 'credentials'}>
                                 <Chip size="sm" color="danger" variant="soft">
                                   {t('profiles.migrate_credentials_badge')}

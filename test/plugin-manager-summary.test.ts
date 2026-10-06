@@ -73,10 +73,10 @@ describe('plugins manager queue summary', () => {
     expect(toasts).toHaveLength(1)
     expect(toasts[0][0]).toBe('Plugin operations finished')
     expect(toasts[0][1]?.description).toBe('3 succeeded')
-    expect(toasts[0][1]?.timeout).toBe(0)
-    toasts[0][1]?.actionProps?.onPress?.()
-    expect(toast.close).toHaveBeenCalled()
-    expect(restart).toHaveBeenCalledTimes(1)
+    // 队列自己热更新插件：汇总气泡不再常驻、也不再挂「重启」按钮
+    expect(toasts[0][1]?.timeout).toBeUndefined()
+    expect(toasts[0][1]?.actionProps).toBeUndefined()
+    expect(restart).not.toHaveBeenCalled()
     expect(plugins.queueResults).toEqual([])
   })
 

@@ -34,14 +34,21 @@ Element.prototype.getAnimations = function () {
   return []
 }
 
-const analysis = {
-  plugins: [
-    { id: '@scope/installed', version: '0.1.0', spec: '@scope/installed@0.1.0', verdict: 'compatible' },
-    { id: '@scope/fresh', version: '2.1.0', spec: '@scope/fresh@2.0.0', verdict: 'downgrade', targetVersion: '2.0.0' },
-  ],
-  data: [{ kind: 'patch', count: 2 }, { kind: 'policy', count: 1 }, { kind: 'credentials' }],
+function fixtures() {
+  return {
+    plugins: [
+      { id: '@scope/installed', version: '0.1.0', spec: '@scope/installed@0.1.0', verdict: 'compatible' },
+      { id: '@scope/fresh', version: '2.1.0', spec: '@scope/fresh@2.0.0', verdict: 'downgrade', targetVersion: '2.0.0' },
+    ],
+    data: [
+      { kind: 'patch', count: 2, covered: false },
+      { kind: 'policy', count: 1, covered: false },
+      { kind: 'credentials', covered: false },
+    ],
+  }
 }
 
+let analysis: ReturnType<typeof fixtures>
 let client: QueryClient
 let calls: Record<string, unknown[]>
 
@@ -71,11 +78,12 @@ async function openDialog() {
 
 async function submit() {
   fireEvent.click(screen.getByText('profiles.migrate_confirm'))
-  await waitFor(() => expect(calls.install).toBeDefined())
+  await waitFor(() => expect(calls.migrate).toBeDefined())
 }
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
+  analysis = fixtures()
   calls = {}
   install.mockClear()
   install.mockImplementation(async (refs: string[]) => {
@@ -108,20 +116,37 @@ afterEach(() => {
 })
 
 describe('profileMigrateDialog', () => {
-  it('插件默认全部勾选，凭据必须显式勾选', async () => {
+  it('已装的插件默认不勾选，未装的默认勾选', async () => {
     await openDialog()
+    expect((screen.getByRole('checkbox', { name: '@scope/installed' }) as HTMLInputElement).disabled).toBe(true)
+
     await submit()
 
     expect(calls.migrate).toEqual([{ sourceId: 'core-021', items: ['patch', 'policy'] }])
-    expect(calls.install).toEqual(['@scope/installed@0.1.0', '@scope/fresh@2.0.0'])
+    expect(calls.install).toEqual(['@scope/fresh@2.0.0'])
   })
 
-  it('取消勾选已安装的插件后不再随迁移安装', async () => {
+  it('取消勾选未装插件后只迁移档案数据', async () => {
     await openDialog()
-    fireEvent.click(screen.getByRole('checkbox', { name: '@scope/installed' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '@scope/fresh' }))
     await submit()
 
-    expect(calls.install).toEqual(['@scope/fresh@2.0.0'])
+    expect(calls.install).toBeUndefined()
+  })
+
+  it('当前档案已完全包含的数据项不可勾选也不参与迁移', async () => {
+    analysis.data = [
+      { kind: 'patch', count: 2, covered: true },
+      { kind: 'policy', count: 1, covered: false },
+      { kind: 'credentials', covered: false },
+    ]
+    await openDialog()
+    fireEvent.click(screen.getByText('profiles.migrate_tab_data'))
+
+    expect((await screen.findByRole('checkbox', { name: 'patch' }) as HTMLInputElement).disabled).toBe(true)
+    await submit()
+
+    expect(calls.migrate).toEqual([{ sourceId: 'core-021', items: ['policy'] }])
   })
 
   it('凭据必须显式勾选才会迁移', async () => {

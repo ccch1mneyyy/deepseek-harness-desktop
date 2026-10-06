@@ -73,7 +73,7 @@ pub enum MigrationDataKind {
     Credentials,
 }
 
-/// 源档案里存在的一项档案级数据（不存在的项不进列表，前端据此渲染）。
+/// 档案级数据项：`covered` = 目标档案已完全包含（迁移无意义，界面据此禁用勾选）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationDataItem {
@@ -81,6 +81,7 @@ pub struct MigrationDataItem {
     /// 条目数；凭据等无「条数」概念的一项缺省
     #[serde(skip_serializing_if = "Option::is_none")]
     pub count: Option<usize>,
+    pub covered: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -201,6 +202,7 @@ pub async fn analyze(
         return Err("PROFILE_MIGRATION_SOURCE_MISSING: source profile does not exist".to_string());
     }
     let entries = candidates(app_handle, &dir);
+    let target = fs_guard::join_safe(&root, &super::active_profile(app_handle))?;
     let specs: Vec<String> = entries
         .iter()
         .map(|(id, version)| format!("{id}@{version}"))
@@ -235,7 +237,7 @@ pub async fn analyze(
     }
     Ok(MigrationAnalysis {
         plugins,
-        data: data_items(&dir),
+        data: data_items(&dir, &target),
     })
 }
 
@@ -276,36 +278,56 @@ pub fn apply(
 }
 
 /// 源档案里实际存在的档案级数据（空项不列，前端据列表决定渲染哪些开关）。
-fn data_items(dir: &Path) -> Vec<MigrationDataItem> {
+///
+/// `covered` 逐类与目标档案对比：目标已完全包含源的内容时迁移是空操作，界面应当
+/// 直接禁用勾选（与「目标已装同名插件」同一套语义）。
+fn data_items(source: &Path, target: &Path) -> Vec<MigrationDataItem> {
     let mut items = Vec::new();
-    let patch = patch_layer_entries(&dir.join(PATCH_FILE)).map_or(0, |entries| entries.len());
-    if patch > 0 {
+    let patch = patch_layer_entries(&source.join(PATCH_FILE)).unwrap_or_default();
+    if !patch.is_empty() {
         items.push(MigrationDataItem {
             kind: MigrationDataKind::Patch,
-            count: Some(patch),
+            count: Some(patch.len()),
+            covered: patch_covered(&patch, target),
         });
     }
-    let disabled = disable::load_disabled(dir).len();
-    if disabled > 0 {
+    let disabled = disable::load_disabled(source);
+    if !disabled.is_empty() {
+        let existing = disable::load_disabled(target);
         items.push(MigrationDataItem {
             kind: MigrationDataKind::Disabled,
-            count: Some(disabled),
+            count: Some(disabled.len()),
+            covered: disabled.keys().all(|id| existing.contains_key(id)),
         });
     }
-    let policy = release_age_excludes(dir).len();
-    if policy > 0 {
+    let policy = release_age_excludes(source);
+    if !policy.is_empty() {
+        let existing = release_age_excludes(target);
         items.push(MigrationDataItem {
             kind: MigrationDataKind::Policy,
-            count: Some(policy),
+            count: Some(policy.len()),
+            covered: policy.iter().all(|entry| existing.contains(entry)),
         });
     }
-    if dir.join(CREDENTIALS_FILE).is_file() {
+    if source.join(CREDENTIALS_FILE).is_file() {
         items.push(MigrationDataItem {
             kind: MigrationDataKind::Credentials,
             count: None,
+            covered: target.join(CREDENTIALS_FILE).exists(),
         });
     }
     items
+}
+
+/// 目标档案的补丁层是否已包含源档案的全部条目；无 `id` 的条目一律算未覆盖
+/// （它们没有身份键，无法判定是否重复）。
+fn patch_covered(source: &[Value], target: &Path) -> bool {
+    let existing = patch_layer_entries(&target.join(PATCH_FILE)).unwrap_or_default();
+    let ids: HashSet<&str> = existing.iter().filter_map(patch_entry_id).collect();
+    source.iter().all(|entry| match patch_entry_id(entry) {
+        Some(id) => ids.contains(id),
+        None => false,
+    })
 }
 
 /// 补丁层文件的顶层数组；文件缺失、读不出或不是数组时返回 `None`。
@@ -637,19 +659,71 @@ mod tests {
     #[test]
     fn data_items_lists_only_what_the_source_profile_has() {
         let dir = workspace("items");
-        assert!(data_items(&dir).is_empty(), "空档案不应列出任何数据项");
+        let target = workspace("items-target");
+        assert!(data_items(&dir, &target).is_empty(), "空档案不应列出任何数据项");
 
         fs::write(dir.join(PATCH_FILE), "- id: only-patch\n").unwrap();
         fs::write(dir.join(CREDENTIALS_FILE), "token: x\n").unwrap();
 
-        let items = data_items(&dir);
+        let items = data_items(&dir, &target);
         assert_eq!(
             items.iter().map(|item| item.kind).collect::<Vec<_>>(),
             vec![MigrationDataKind::Patch, MigrationDataKind::Credentials]
         );
         assert_eq!(items[0].count, Some(1));
+        assert_eq!(items[0].covered, false, "目标档案没有这些条目，必须可迁移");
         assert_eq!(items[1].count, None);
+        assert_eq!(items[1].covered, false);
 
         let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&target);
+    }
+
+    /// 目标档案已完全包含源的内容时迁移是空操作，界面据此禁用勾选。
+    #[test]
+    fn data_items_marks_fully_contained_entries_as_covered() {
+        let source = workspace("covered-source");
+        let target = workspace("covered-target");
+        fs::write(
+            source.join(PATCH_FILE),
+            "- id: shared\n- id: extra\n",
+        )
+        .unwrap();
+        fs::write(target.join(PATCH_FILE), "- id: shared\n").unwrap();
+        fs::write(
+            source.join(POLICY_FILE),
+            "minimumReleaseAgeExclude:\n  - zod@4.4.3\n  - '@scope/pkg@1.0.0'\n",
+        )
+        .unwrap();
+        fs::write(
+            target.join(POLICY_FILE),
+            "minimumReleaseAgeExclude:\n  - zod@4.4.3\n  - '@scope/pkg@1.0.0'\n",
+        )
+        .unwrap();
+        fs::write(source.join(CREDENTIALS_FILE), "token: x\n").unwrap();
+        fs::write(target.join(CREDENTIALS_FILE), "token: y\n").unwrap();
+
+        let items = data_items(&source, &target);
+        let covered: Vec<(MigrationDataKind, bool)> =
+            items.iter().map(|item| (item.kind, item.covered)).collect();
+        assert_eq!(
+            covered,
+            vec![
+                (MigrationDataKind::Patch, false),
+                (MigrationDataKind::Policy, true),
+                (MigrationDataKind::Credentials, true),
+            ],
+            "只有目标已完整包含的类目才算 covered"
+        );
+
+        fs::write(target.join(PATCH_FILE), "- id: shared\n- id: extra\n").unwrap();
+        let items = data_items(&source, &target);
+        assert!(
+            items.iter().all(|item| item.covered),
+            "目标补齐后全部类目都应视为已包含：{items:?}"
+        );
+
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&target);
     }
 }

@@ -130,7 +130,7 @@ describe('plugins manager upgrade attribution', () => {
     ])
   })
 
-  it('keeps the restart entry for the target that landed despite the general error', async () => {
+  it('reports the landed target without a restart entry despite the general error', async () => {
     invoke.mockImplementation(async (command: string) => {
       if (command === 'update_dsh_plugins')
         throw failureError([{ name: 'bbb', message: NETWORK_MESSAGE }])
@@ -145,10 +145,9 @@ describe('plugins manager upgrade attribution', () => {
     ])
     const toasts = resultToasts()
     expect(toasts).toHaveLength(1)
-    expect(toasts[0][1]?.timeout).toBe(0)
-    expect(toasts[0][1]?.actionProps?.children).toBe('Restart')
-    toasts[0][1]?.actionProps?.onPress?.()
-    expect(restart).toHaveBeenCalledTimes(1)
+    expect(toasts[0][1]?.timeout).toBeUndefined()
+    expect(toasts[0][1]?.actionProps).toBeUndefined()
+    expect(restart).not.toHaveBeenCalled()
   })
 
   it('attributes a failure inside a batch that also holds an authorised target', async () => {
