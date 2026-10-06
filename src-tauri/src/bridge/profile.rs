@@ -6,6 +6,7 @@
 
 use crate::config;
 use crate::service::profile;
+use crate::service::profile::migrate::{MigrationAnalysis, MigrationDataKind, MigrateReport};
 use tauri::AppHandle;
 
 /// 档案列表（$DSH_HOME/profiles 下的目录，含 active/default 标记）
@@ -55,4 +56,28 @@ pub async fn clone_profile(
     })
     .await
     .map_err(|e| format!("PROFILE_CLONE_TASK: {e}"))?
+}
+
+/// 分析源档案的可迁移插件与档案级数据（只读，判定基准 = 当前核心版本）
+#[tauri::command]
+pub async fn analyze_profile_migration(
+    app_handle: AppHandle,
+    source_id: String,
+) -> Result<MigrationAnalysis, String> {
+    profile::migrate::analyze(&app_handle, &source_id).await
+}
+
+/// 把源档案选中的数据并入当前档案（逐项独立，结果里逐项报告）
+#[tauri::command]
+pub async fn migrate_profile_data(
+    app_handle: AppHandle,
+    source_id: String,
+    items: Vec<MigrationDataKind>,
+) -> Result<MigrateReport, String> {
+    let handle = app_handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        profile::migrate::apply(&handle, &source_id, &items)
+    })
+    .await
+    .map_err(|e| format!("PROFILE_MIGRATION_TASK: {e}"))?
 }

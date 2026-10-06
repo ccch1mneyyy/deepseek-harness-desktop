@@ -21,6 +21,8 @@ export const queryKeys = {
   localPluginHmr: ['local_plugin_hmr'] as const,
   /** dsh 档案列表 */
   profiles: ['profiles'] as const,
+  /** 某一档案的可迁移插件与数据（迁移对话框，按源档案 id 区分） */
+  profileMigration: (sourceId: string) => ['profile_migration', sourceId] as const,
   /** 当前档案的备份快照列表 */
   backups: ['backups'] as const,
   /** 数据目录状态与旧目录备份（issue #871） */

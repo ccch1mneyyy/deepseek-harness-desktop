@@ -41,7 +41,10 @@ pub(crate) fn load_disabled(profile: &Path) -> HashMap<String, DisabledEntry> {
 }
 
 /// 持久化禁用清单（pretty JSON + 尾部换行）。
-fn save_disabled(profile: &Path, map: &HashMap<String, DisabledEntry>) -> Result<(), String> {
+pub(crate) fn save_disabled(
+    profile: &Path,
+    map: &HashMap<String, DisabledEntry>,
+) -> Result<(), String> {
     let path = disabled_path(profile);
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("DISABLED_DIR_CREATE_FAILED: {e}"))?;

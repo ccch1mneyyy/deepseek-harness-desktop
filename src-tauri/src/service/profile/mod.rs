@@ -38,6 +38,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
+pub mod migrate;
+
 /// 桌面端默认档案（内置，不可删除）
 pub const DEFAULT_PROFILE: &str = "web";
 

@@ -1528,6 +1528,8 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::remove_profile,
         crate::bridge::reset_profile,
         crate::bridge::clone_profile,
+        crate::bridge::analyze_profile_migration,
+        crate::bridge::migrate_profile_data,
         crate::bridge::backup_profile,
         crate::bridge::export_recovery_backup,
         crate::bridge::restore_profile,

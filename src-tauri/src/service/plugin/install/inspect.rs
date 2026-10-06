@@ -44,6 +44,30 @@ pub async fn inspect_specs(
     Ok(results)
 }
 
+/// 拉取包的完整版本清单（缩写 packument：`versions` 映射里带每个版本的依赖声明）。
+///
+/// 与 [`inspect_one`] 读的单版本清单不同：判定「哪个历史版本与该核心兼容」必须
+/// 遍历全部版本，只有不带版本号的 packument 才有。任何失败返回 `None`（Fail-Open）。
+pub(crate) async fn packument(app_handle: &AppHandle, name: &str) -> Option<serde_json::Value> {
+    let client = crate::config::proxy::http_client_builder(app_handle)
+        .ok()?
+        .timeout(INSPECT_TIMEOUT)
+        .build()
+        .ok()?;
+    let url = format!("https://registry.npmjs.org/{}", encode_registry_name(name));
+    let response = client
+        .get(&url)
+        .header("accept", "application/vnd.npm.install-v1+json")
+        .header("user-agent", "deepseek-harness-desktop")
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    response.json::<serde_json::Value>().await.ok()
+}
+
 /// 单条 spec：本地目录离线读清单；静态解析不出 registry 包名的来源（`github:`
 /// 简写、git / tarball URL）不做网络请求。
 async fn inspect_one(
