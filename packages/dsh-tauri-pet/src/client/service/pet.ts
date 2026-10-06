@@ -8,10 +8,12 @@ import {
   CMD_IMPORT_PET,
   CMD_LIST_PETS,
   CMD_LIST_PRESET_PETS,
+  CMD_OPEN_EXTERNAL_URL,
   CMD_SET_ACTIVE_PET,
   CMD_SET_FORCE_XWAYLAND,
   CMD_SET_PET_ENABLED,
   CMD_SET_PET_SIZE,
+  PET_COMMUNITY_URL,
   PET_HATCH_PROMPT,
 } from '../constants'
 import { store } from '../store'
@@ -173,6 +175,18 @@ export async function importPetArchive(input: { name: string, data: string }): P
   return guard('import pet', async () => {
     await invoke<PetListItem>(CMD_IMPORT_PET, { name: input.name, data: input.data })
     store.pet.setCodexPets(await invoke<PetListItem[]>(CMD_LIST_PETS, { source: 'codex' }))
+    return { ok: true }
+  })
+}
+
+/**
+ * Action：在系统浏览器中打开 Codex 宠物社区站点。
+ *
+ * 只借桌面端既有的外链命令，不开新窗口、不改任何持久状态。
+ */
+export async function openCommunityShare(): Promise<PetActionResult> {
+  return guard('open community share', async () => {
+    await invoke(CMD_OPEN_EXTERNAL_URL, { url: PET_COMMUNITY_URL })
     return { ok: true }
   })
 }

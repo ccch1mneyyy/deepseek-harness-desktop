@@ -1,6 +1,6 @@
 import type { ChangeEvent, ReactElement } from 'react'
 import type { PetActionResult, PetListItem } from '../service/pet.types'
-import { ArrowRightFromSquare, Button, Icon, Plus, SegmentedControl } from 'dsh-tauri-ui/client'
+import { ArrowRightFromSquare, Button, Globe, Icon, Plus, SegmentedControl } from 'dsh-tauri-ui/client'
 import { useStore, useWatchImmediate } from 'dsh-tauri/client'
 import { useEffect, useId, useRef, useState } from 'react'
 import { PET_DEFAULT_SIZE, PET_SIZE_MAX, PET_SIZE_MIN, PET_SIZE_STEP } from '../constants'
@@ -13,6 +13,7 @@ import {
   loadForceXwayland,
   loadPetCatalog,
   loadPetOverlaySupported,
+  openCommunityShare,
   resizePet,
   toggleForceXwayland,
   togglePet,
@@ -132,6 +133,11 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
         setXwaylandRestart(true)
       return result
     }, 'xwaylandFailed')
+  }
+
+  /** 社区分享：在系统浏览器中打开 Codex 宠物社区站点。 */
+  async function shareCommunity(): Promise<void> {
+    await run(openCommunityShare, 'communityShareFailed')
   }
 
   async function commitSize(value: number): Promise<void> {
@@ -266,7 +272,7 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
                     type="button"
                     variant="outline"
                     size="sm"
-                    icon={<Icon as={Plus} />}
+                    icon={<Icon size={14} as={Plus} />}
                     disabled={busy}
                     onClick={() => { void createPet() }}
                   >
@@ -289,7 +295,7 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
                     type="button"
                     variant="outline"
                     size="sm"
-                    icon={<Icon as={ArrowRightFromSquare} />}
+                    icon={<Icon size={14} as={ArrowRightFromSquare} />}
                     disabled={busy}
                     onClick={() => fileRef.current?.click()}
                   >
@@ -303,6 +309,16 @@ export function PetSettings(props: PetSettingsProps): ReactElement {
                     disabled={busy}
                     onChange={(event) => { void onImport(event) }}
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    icon={<Icon size={14} as={Globe} />}
+                    disabled={busy}
+                    onClick={() => { void shareCommunity() }}
+                  >
+                    {locale.text('communityShare')}
+                  </Button>
                 </>
               )}
         </div>

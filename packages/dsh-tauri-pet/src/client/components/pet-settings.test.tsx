@@ -19,6 +19,7 @@ vi.mock('dsh-tauri/client', async () => ({
 
 vi.mock('dsh-tauri-ui/client', () => ({
   ArrowRightFromSquare: () => null,
+  Globe: () => null,
   Plus: () => null,
   Icon: () => null,
   Button: ({ variant: _variant, size: _size, icon: _icon, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string, size?: string, icon?: ReactNode }) => <button {...props} />,
@@ -37,6 +38,7 @@ vi.mock('../service/pet', () => ({
   loadForceXwayland: vi.fn(),
   loadPetCatalog: vi.fn(),
   loadPetOverlaySupported: vi.fn(),
+  openCommunityShare: vi.fn(),
   resizePet: vi.fn(),
   toggleForceXwayland: vi.fn(),
   togglePet: vi.fn(),
@@ -93,7 +95,7 @@ beforeEach(() => {
     overlaySupported: false,
     forceXwayland: false,
   })
-  for (const action of [petService.loadPetCatalog, petService.choosePet, petService.clearPetSelection, petService.enablePet, petService.togglePet, petService.toggleForceXwayland, petService.resizePet, petService.importPetArchive])
+  for (const action of [petService.loadPetCatalog, petService.choosePet, petService.clearPetSelection, petService.enablePet, petService.togglePet, petService.toggleForceXwayland, petService.resizePet, petService.importPetArchive, petService.openCommunityShare])
     vi.mocked(action).mockResolvedValue({ ok: true })
   container = document.createElement('div')
   document.body.append(container)
@@ -240,5 +242,18 @@ describe('pet settings action boundaries', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(locale.text('importFailed'))
     expect(input.disabled).toBe(false)
     expect(input.value).toBe('')
+  })
+
+  it('community share sits in the Codex tab, opens the site and reports its own failure', async () => {
+    vi.mocked(petService.openCommunityShare).mockResolvedValueOnce({ ok: false, error: 'no browser' })
+    await mount()
+    expect(container.textContent).not.toContain(locale.text('communityShare'))
+    await click(button('codex'))
+    await click(button(locale.text('communityShare')))
+    expect(petService.openCommunityShare).toHaveBeenCalledExactlyOnceWith()
+    expect(petService.importPetArchive).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(locale.text('communityShareFailed'))
+    await click(button(locale.text('communityShare')))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 })

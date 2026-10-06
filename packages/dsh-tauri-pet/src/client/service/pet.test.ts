@@ -13,6 +13,7 @@ import {
   loadPetCatalog,
   loadPetOverlaySupported,
   loadPetStatus,
+  openCommunityShare,
   resizePet,
   toggleForceXwayland,
   togglePet,
@@ -165,6 +166,12 @@ describe('pet service native command contracts', () => {
     expect(store.pet.catalogLoaded).toBe(false)
   })
 
+  it('community share opens the Codex pets site through the external URL command', async () => {
+    invoke.mockResolvedValue(undefined)
+    expect(await openCommunityShare()).toEqual({ ok: true })
+    expect(invoke.mock.calls).toEqual([['open_external_url', { url: 'https://codex-pets.net/#/' }]])
+  })
+
   it('xWayland query and action retain native boolean results', async () => {
     invoke.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
     expect(await loadForceXwayland()).toBe(true)
@@ -189,6 +196,7 @@ describe('pet service native command contracts', () => {
     { label: 'toggle force xwayland', action: () => toggleForceXwayland({ enabled: true }) },
     { label: 'resize pet', action: () => resizePet({ size: 140 }) },
     { label: 'import pet', action: () => importPetArchive({ name: 'bad.zip', data: 'bad' }) },
+    { label: 'open community share', action: openCommunityShare },
   ])('$label preserves error messages and logging labels without changing cached values', async ({ label, action }) => {
     const error = new Error('native refused')
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})

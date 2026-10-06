@@ -28,6 +28,10 @@ export const CMD_SET_PET_SIZE = 'set_pet_size'
 export const CMD_LIST_PETS = 'list_pets'
 export const CMD_IMPORT_PET = 'import_pet'
 export const CMD_LIST_PRESET_PETS = 'list_preset_pets'
+export const CMD_OPEN_EXTERNAL_URL = 'open_external_url'
+
+/** Codex 宠物社区站点（「社区分享」按钮的目标地址）。 */
+export const PET_COMMUNITY_URL = 'https://codex-pets.net/#/'
 
 /**
  * 设置菜单补丁的选择器与守卫属性。
