@@ -64,7 +64,7 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
   const [dataOverrides, setDataOverrides] = useState<Record<string, boolean>>({})
 
   // 3. 档案迁移分析数据 Query
-  const { data: analysis, isLoading, error } = useQuery({
+  const { data: analysis, isLoading, isFetching, error } = useQuery({
     queryKey: queryKeys.profileMigration(pickedSourceId),
     queryFn: () => invoke<MigrationAnalysis>('analyze_profile_migration', { sourceId: pickedSourceId }),
     enabled: Boolean(pickedSourceId),
@@ -84,6 +84,8 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
   const dataItemMap = new Map(dataItems.map(item => [item.kind, item]))
   // 已装列表没到位时不能渲染勾选：`installedMap` 为空会让每个插件都像「未装」而默认勾上
   const analyzing = isLoading || manager.loading
+  // 提交还要求分析结果确实到手：后台刷新 / 刷新失败时缓存里的旧选择不能拿来对新来源提交
+  const analysisReady = analysis !== undefined && error === null && !isFetching
 
   /** 有迁移价值：同名插件未装、档案数据未被当前档案完全包含 */
   function pluginMigratable(entry: MigrationEntry): boolean {
@@ -160,7 +162,7 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
     },
   })
 
-  const canSubmit = !busy && !analyzing && Boolean(pickedSourceId) && (pickedPlugins.length > 0 || pickedData.length > 0)
+  const canSubmit = !busy && !analyzing && analysisReady && Boolean(pickedSourceId) && (pickedPlugins.length > 0 || pickedData.length > 0)
 
   return (
     <AlertDialog onOpenChange={disclosure.cancel} isOpen={disclosure.visible}>
