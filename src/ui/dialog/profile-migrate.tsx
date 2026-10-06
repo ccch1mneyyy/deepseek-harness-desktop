@@ -114,20 +114,15 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
       const kinds = pickedData
 
       // 阶段 A: 迁移档案数据
+      let appliedCount = 0
+      let failedKinds: MigrationDataKind[] = []
       if (kinds.length > 0) {
         const report = await invoke<MigrateReport>('migrate_profile_data', {
           sourceId: pickedSourceId,
           items: kinds,
         })
-        if (report.failures.length > 0) {
-          const detail = report.failures
-            .map((f) => {
-              const count = dataItemMap.get(f.kind)?.count ?? '0'
-              return t(DATA_LABEL_KEYS[f.kind], { count })
-            })
-            .join('、')
-          toast(t('profiles.migrate_partial'), { variant: 'danger', description: detail })
-        }
+        appliedCount = report.applied.length
+        failedKinds = report.failures.map(failure => failure.kind)
       }
 
       // 阶段 B: 安装插件
@@ -137,17 +132,23 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
         failed = results.filter(result => !result.ok).length
       }
 
-      return { totalCount: specs.length + kinds.length, specCount: specs.length, failedCount: failed }
+      return { appliedCount, failedKinds, specCount: specs.length, failedCount: failed }
     },
-    onSuccess: ({ totalCount, specCount, failedCount }) => {
+    onSuccess: ({ appliedCount, failedKinds, specCount, failedCount }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins })
 
+      if (failedKinds.length > 0) {
+        const detail = failedKinds
+          .map(kind => t(DATA_LABEL_KEYS[kind], { count: dataItemMap.get(kind)?.count ?? '0' }))
+          .join('、')
+        toast(t('profiles.migrate_partial'), { variant: 'danger', description: detail })
+      }
       if (failedCount > 0) {
         toast(t('profiles.migrate_plugin_failed', { count: failedCount }), { variant: 'danger' })
       }
       // 装了插件的那一半由插件管理器的结果气泡负责提示，这里只在纯数据迁移时补一条
-      else if (specCount === 0) {
-        toast(t('profiles.migrate_success', { count: totalCount }), { variant: 'accent' })
+      else if (specCount === 0 && appliedCount > 0) {
+        toast(t('profiles.migrate_success', { count: appliedCount }), { variant: 'accent' })
       }
       disclosure.confirm()
     },
@@ -178,7 +179,13 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                   variant="secondary"
                   className="flex-1"
                   selectedKey={pickedSourceId}
-                  onSelectionChange={key => setPickedSourceId(String(key))}
+                  onSelectionChange={(key) => {
+                    // 勾选按插件 id / 数据类目记账，两个来源可以同名：换来源必须清空，
+                    // 否则上一个来源里勾过的凭据会直接套用到新来源。
+                    setPickedSourceId(String(key))
+                    setPluginOverrides({})
+                    setDataOverrides({})
+                  }}
                   isDisabled={busy}
                   aria-label={t('profiles.migrate_source')}
                   placeholder={t('profiles.migrate_source')}

@@ -94,8 +94,13 @@ beforeEach(() => {
   mockIPC((command, args) => {
     if (command === 'get_cores')
       return [{ id: 'app', source: 'app', version: '0.1.7', tag: 'dsh-0.1.7', active: true }]
-    if (command === 'get_profiles')
-      return [{ id: 'core-021', name: 'core-021' }, { id: 'web', name: 'web', active: true }]
+    if (command === 'get_profiles') {
+      return [
+        { id: 'core-021', name: 'core-021' },
+        { id: 'core-020', name: 'core-020' },
+        { id: 'web', name: 'web', active: true },
+      ]
+    }
     if (command === 'get_dsh_plugins')
       return []
     if (command === 'analyze_profile_migration') {
@@ -147,6 +152,21 @@ describe('profileMigrateDialog', () => {
     await submit()
 
     expect(calls.migrate).toEqual([{ sourceId: 'core-021', items: ['policy'] }])
+  })
+
+  it('换来源档案后上一个来源的勾选作废', async () => {
+    await openDialog()
+    fireEvent.click(screen.getByText('profiles.migrate_tab_data'))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'credentials' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /core-021/ }))
+    fireEvent.click(await screen.findByRole('option', { name: 'core-020' }))
+    await screen.findByRole('checkbox', { name: '@scope/installed' })
+
+    await submit()
+
+    // 换源后凭据必须为新来源重新显式勾选，不能被上一个来源的选择带过去
+    expect(calls.migrate).toEqual([{ sourceId: 'core-020', items: ['patch', 'policy'] }])
   })
 
   it('凭据必须显式勾选才会迁移', async () => {

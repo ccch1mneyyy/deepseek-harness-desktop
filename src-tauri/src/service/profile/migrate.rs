@@ -265,7 +265,7 @@ pub fn apply(
         failures: Vec::new(),
     };
     for kind in kinds {
-        match merge(app_handle, *kind, &source, &target) {
+        match merge(*kind, &source, &target) {
             Ok(true) => report.applied.push(*kind),
             Ok(false) => report.skipped.push(*kind),
             Err(message) => report.failures.push(MigrationFailure {
@@ -364,16 +364,11 @@ fn release_age_excludes(dir: &Path) -> Vec<String> {
 }
 
 /// 单项合并；`Ok(true)` = 已写入，`Ok(false)` = 目标已有或源里没有内容。
-fn merge(
-    app_handle: &AppHandle,
-    kind: MigrationDataKind,
-    source: &Path,
-    target: &Path,
-) -> Result<bool, String> {
+fn merge(kind: MigrationDataKind, source: &Path, target: &Path) -> Result<bool, String> {
     match kind {
         MigrationDataKind::Patch => merge_patch(source, target),
         MigrationDataKind::Disabled => merge_disabled(source, target),
-        MigrationDataKind::Policy => merge_policy(app_handle, source, target),
+        MigrationDataKind::Policy => merge_policy(source, target),
         MigrationDataKind::Credentials => merge_credentials(source, target),
     }
 }
@@ -431,7 +426,9 @@ fn merge_disabled(source: &Path, target: &Path) -> Result<bool, String> {
 }
 
 /// 发布时长豁免并进目标档案（复用既有的档案级写入，含去重与落盘格式）。
-fn merge_policy(app_handle: &AppHandle, source: &Path, target: &Path) -> Result<bool, String> {
+///
+/// 按 `target` 路径写：调用开始时捕获的目标档案不能在半途被「当前档案」改道。
+fn merge_policy(source: &Path, target: &Path) -> Result<bool, String> {
     let existing = release_age_excludes(target);
     let missing: Vec<String> = release_age_excludes(source)
         .into_iter()
@@ -440,7 +437,7 @@ fn merge_policy(app_handle: &AppHandle, source: &Path, target: &Path) -> Result<
     if missing.is_empty() {
         return Ok(false);
     }
-    super::allow_profile_release_age(app_handle, &missing)?;
+    super::release_age_excludes_at(target, &missing)?;
     Ok(true)
 }
 
@@ -654,6 +651,27 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 豁免写进 `target` 那份文件：调用方捕获的目标档案不能被「当前档案」改道。
+    #[test]
+    fn merge_policy_writes_into_the_captured_target_dir() {
+        let source = workspace("policy-source");
+        let target = workspace("policy-target");
+        fs::write(
+            source.join(POLICY_FILE),
+            "minimumReleaseAgeExclude:\n  - zod@4.4.3\n",
+        )
+        .unwrap();
+        fs::write(target.join(POLICY_FILE), "packages:\n  - .\n").unwrap();
+
+        assert!(merge_policy(&source, &target).unwrap());
+        assert_eq!(release_age_excludes(&target), vec!["zod@4.4.3".to_string()]);
+        // 幂等：第二次没有可加条目
+        assert!(!merge_policy(&source, &target).unwrap());
+
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&target);
     }
 
     #[test]

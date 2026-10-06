@@ -159,7 +159,7 @@ pub(crate) fn ensure_profile_pnpm_policy(app_handle: &AppHandle) -> Result<(), S
         .iter()
         .map(|package| (*package).to_string())
         .collect();
-    profile_release_age_excludes(app_handle, &entries)
+    release_age_excludes_at(&profile_dir_of(app_handle, &active_profile(app_handle)), &entries)
 }
 
 /// 档案的 `minimumReleaseAgeExclude` 里是否已经有这个精确 `包名@版本`。
@@ -200,15 +200,16 @@ pub(crate) fn allow_profile_release_age(
     if entries.is_empty() {
         return Err("PROFILE_RELEASE_AGE_EMPTY: no release-age exemption to record".to_string());
     }
-    profile_release_age_excludes(app_handle, entries)
+    release_age_excludes_at(&profile_dir_of(app_handle, &active_profile(app_handle)), entries)
 }
 
-/// 把 `entries` 并入档案 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（按需落盘）。
-fn profile_release_age_excludes(
-    app_handle: &AppHandle,
-    entries: &[String],
-) -> Result<(), String> {
-    let path = profile_dir_of(app_handle, &active_profile(app_handle)).join("pnpm-workspace.yaml");
+/// 把 `entries` 并入**指定档案目录** `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`
+/// （按需落盘）。
+///
+/// 收目录而不是 `AppHandle`：调用方可能持有「操作开始时捕获」的档案路径，半途用户切了
+/// 当前档案时，写入不能被改道到新档案（档案迁移即如此）。
+pub(crate) fn release_age_excludes_at(dir: &Path, entries: &[String]) -> Result<(), String> {
+    let path = dir.join("pnpm-workspace.yaml");
     let existing = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
