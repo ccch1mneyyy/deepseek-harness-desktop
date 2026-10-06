@@ -71,6 +71,7 @@
   "menu.check_update": "Check for Updates",
   "menu.new_version": "New version available",
   "menu.about": "About Desktop",
+  "menu.toggle_devtools": "Toggle Developer Tools",
   "menu.run_logs": "Run Logs",
   "menu.file": "File",
   "menu.settings": "Settings…",

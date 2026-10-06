@@ -423,6 +423,13 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let toggle_devtools = MenuItem::with_id(
+        app,
+        "desktop-toggle-devtools",
+        crate::config::i18n::t("menu.toggle_devtools"),
+        true,
+        None::<&str>,
+    )?;
     let task_manager = MenuItem::with_id(
         app,
         "desktop-task-manager",
@@ -473,6 +480,7 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
             &harness_feedback,
             &feedback_separator,
             &run_logs,
+            &toggle_devtools,
             &task_manager,
         ],
     )?;
@@ -1567,6 +1575,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::desktop::window::create_app_window,
         crate::desktop::builder::sync_view_menu,
         crate::desktop::window::quit_app,
+        crate::desktop::window::toggle_devtools,
         crate::bridge::log_frontend,
         crate::bridge::get_pet_status,
         crate::bridge::get_pet_overlay_supported,
@@ -1699,6 +1708,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             | "desktop-harness"
             | "desktop-about"
             | "desktop-copy-run-logs"
+            | "desktop-toggle-devtools"
             | "desktop-check-update"
             | "desktop-restart"
             | "desktop-keyboard-shortcuts"

@@ -71,6 +71,7 @@
   "menu.check_update": "检查更新",
   "menu.new_version": "存在新版本",
   "menu.about": "关于 Desktop",
+  "menu.toggle_devtools": "切换开发者工具",
   "menu.run_logs": "运行日志",
   "menu.file": "文件",
   "menu.settings": "设置…",

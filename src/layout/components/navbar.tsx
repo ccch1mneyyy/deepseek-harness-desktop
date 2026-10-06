@@ -91,7 +91,7 @@ const HELP_LINKS = {
 type FileAction = 'new-window' | 'new-chat' | 'open-folder' | 'close' | 'quit'
 
 /** 「帮助」菜单的动作 id。 */
-type HelpAction = 'task-manager' | 'keyboard-shortcuts' | 'copy-run-logs' | 'check-update' | 'about' | keyof typeof HELP_LINKS
+type HelpAction = 'toggle-devtools' | 'task-manager' | 'keyboard-shortcuts' | 'copy-run-logs' | 'check-update' | 'about' | keyof typeof HELP_LINKS
 
 /** 「运行」菜单项：直接打开配置对话框并定位到对应面板。 */
 const CONFIG_TABS = [
@@ -289,7 +289,9 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
   }
 
   function onHelpAction(key: HelpAction) {
-    if (key === 'task-manager')
+    if (key === 'toggle-devtools')
+      void toggleDevtools()
+    else if (key === 'task-manager')
       void openTaskManager().catch(() => { })
     else if (key === 'check-update')
       void handleCheckUpdate()
@@ -341,6 +343,16 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
     }
     catch (error) {
       console.error('[Navbar] failed to quit app:', error)
+    }
+  }
+
+  /** 切换开发者工具：Rust 侧就近作用于调用窗口（Windows 上只能反复打开，无法关闭检查器） */
+  async function toggleDevtools() {
+    try {
+      await invoke('toggle_devtools')
+    }
+    catch (error) {
+      console.error('[Navbar] failed to toggle devtools:', error)
     }
   }
 
@@ -442,6 +454,9 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
         break
       case 'desktop-about':
         handleOpenAbout()
+        break
+      case 'desktop-toggle-devtools':
+        void toggleDevtools()
         break
       case 'desktop-task-manager':
         onHelpAction('task-manager')
@@ -714,6 +729,14 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
                   <Label>{t('menu.harness_feedback')}</Label>
                 </Dropdown.Item>
                 <Separator />
+                <Dropdown.Item
+                  id="toggle-devtools"
+                  data-testid="dsh-navbar-item-toggle-devtools"
+                  textValue={t('menu.toggle_devtools')}
+                  onAction={() => onHelpAction('toggle-devtools')}
+                >
+                  <Label>{t('menu.toggle_devtools')}</Label>
+                </Dropdown.Item>
                 <Dropdown.Item
                   id="task-manager"
                   data-testid="dsh-navbar-item-task-manager"
