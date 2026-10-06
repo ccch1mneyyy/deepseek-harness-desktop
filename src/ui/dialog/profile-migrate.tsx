@@ -82,6 +82,8 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
 
   const installedMap = new Map(manager.installed.map(p => [p.id, p.version]))
   const dataItemMap = new Map(dataItems.map(item => [item.kind, item]))
+  // 已装列表没到位时不能渲染勾选：`installedMap` 为空会让每个插件都像「未装」而默认勾上
+  const analyzing = isLoading || manager.loading
 
   /** 有迁移价值：同名插件未装、档案数据未被当前档案完全包含 */
   function pluginMigratable(entry: MigrationEntry): boolean {
@@ -158,7 +160,7 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
     },
   })
 
-  const canSubmit = !busy && Boolean(pickedSourceId) && (pickedPlugins.length > 0 || pickedData.length > 0)
+  const canSubmit = !busy && !analyzing && Boolean(pickedSourceId) && (pickedPlugins.length > 0 || pickedData.length > 0)
 
   return (
     <AlertDialog onOpenChange={disclosure.cancel} isOpen={disclosure.visible}>
@@ -226,18 +228,18 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                   </p>
                 )}
               >
-                <If cond={isLoading}>
+                <If cond={analyzing}>
                   <div className="flex justify-center p-6">
                     <Spinner aria-label={t('profiles.migrate_analyzing')} />
                   </div>
                 </If>
-                <If cond={!isLoading && error !== null}>
+                <If cond={!analyzing && error !== null}>
                   <p className="p-4 text-sm text-danger">{t('profiles.migrate_analyze_failed')}</p>
                 </If>
-                <If cond={!isLoading && error === null && !hasCandidate}>
+                <If cond={!analyzing && error === null && !hasCandidate}>
                   <p className="py-4 text-sm text-muted">{t('profiles.migrate_nothing')}</p>
                 </If>
-                <If cond={!isLoading && error === null && hasCandidate}>
+                <If cond={!analyzing && error === null && hasCandidate}>
                   <Tabs defaultSelectedKey="plugins" variant="primary">
                     <Tabs.ListContainer>
                       <Tabs.List aria-label={t('profiles.migrate_title')}>
