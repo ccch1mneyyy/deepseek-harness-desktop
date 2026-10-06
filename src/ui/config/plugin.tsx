@@ -1,5 +1,5 @@
 import type { Plugin, PluginProcess, PluginSearchProblem, PluginSearchResult } from '@/store/modules/plugins'
-import { ChevronRight, CircleExclamation, FolderOpen } from '@gravity-ui/icons'
+import { ChevronRight, CircleExclamation, FolderOpen, Rocket } from '@gravity-ui/icons'
 import { Button, Chip, Description, Input, Label, Spinner, Switch, Tooltip } from '@heroui/react'
 import { useOverlay } from '@overlastic/react'
 import { useToggle } from '@reause/core'
@@ -668,13 +668,36 @@ export function ConfigPlugin() {
               onChange={() => toggleAdvanced()}
               aria-label={t('plugins.advanced_options')}
             >
-              <Switch.Content>
+              <Switch.Content className="gap-2">
                 <Switch.Control>
                   <Switch.Thumb />
                 </Switch.Control>
+                <span className="text-xs font-medium text-muted">{t('plugins.advanced_options')}</span>
               </Switch.Content>
             </Switch>
-            <span className="text-xs font-medium text-muted">{t('plugins.advanced_options')}</span>
+            <If cond={upgradable.length}>
+              <Tooltip delay={0}>
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => void onUpgradeAll()}
+                  isDisabled={upgradingAll}
+                >
+
+                  <If cond={upgradingAll} then={<Spinner size="sm" color="current" />} else={<Rocket className="size-3.5" />} />
+                  {t('plugins.upgrade_all')}
+                </Button>
+                <Tooltip.Content>
+                  <p>
+                    <If
+                      cond={upgradable.length > 0}
+                      then={t('plugins.upgrade_all_hint', { count: upgradable.length })}
+                      else={t('plugins.upgrade_all_empty')}
+                    />
+                  </p>
+                </Tooltip.Content>
+              </Tooltip>
+            </If>
             <Tooltip delay={0}>
               <Button
                 size="sm"
@@ -688,28 +711,7 @@ export function ConfigPlugin() {
                 <p>{t('preinstall.settings_hint')}</p>
               </Tooltip.Content>
             </Tooltip>
-            <Tooltip delay={0}>
-              <Button
-                size="sm"
-                variant="tertiary"
-                onPress={() => void onUpgradeAll()}
-                isDisabled={upgradingAll || upgradable.length === 0}
-              >
-                <span className="flex items-center gap-1">
-                  <If cond={upgradingAll} then={<Spinner size="sm" color="current" />} />
-                  {t('plugins.upgrade_all')}
-                </span>
-              </Button>
-              <Tooltip.Content>
-                <p>
-                  <If
-                    cond={upgradable.length > 0}
-                    then={t('plugins.upgrade_all_hint', { count: upgradable.length })}
-                    else={t('plugins.upgrade_all_empty')}
-                  />
-                </p>
-              </Tooltip.Content>
-            </Tooltip>
+
           </div>
         )}
         description={t('plugins.panel_tooltip')}

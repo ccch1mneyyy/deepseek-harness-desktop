@@ -255,7 +255,21 @@ export function ConfigDebug() {
 
   return (
     <div className="space-y-3">
-      <Panel.Header title={t('config.application')} testId="dsh-config-panel-title" />
+      <Panel.Header
+        title={t('config.application')}
+        testId="dsh-config-panel-title"
+        action={(
+          <Button
+            size="sm"
+            variant="tertiary"
+            isDisabled={!info || copyingEnvironment}
+            onPress={() => onCopyEnvironment()}
+          >
+            <If cond={copyingEnvironment} then={<Spinner size="sm" color="current" />} else={<Copy className="size-3.5" />} />
+            {t('buttons.copy_environment')}
+          </Button>
+        )}
+      />
       {coreBreakingHolder}
       {coreProfileSwitchHolder}
       <div className="space-y-1.5">
@@ -345,17 +359,6 @@ export function ConfigDebug() {
           <Info term={t('ui.platform')}>
             {info ? `${info.platform} / ${info.arch}` : '-'}
           </Info>
-        </div>
-        <div className="mt-2 flex justify-end">
-          <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={!info || copyingEnvironment}
-            onPress={() => onCopyEnvironment()}
-          >
-            <If cond={copyingEnvironment} then={<Spinner size="sm" color="current" />} else={<Copy className="size-3.5" />} />
-            {t('buttons.copy_environment')}
-          </Button>
         </div>
       </div>
       <div className="border-t border-line/30" />

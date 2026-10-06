@@ -155,7 +155,7 @@
         "spec": "dshmarket",
         "name": "DSH Market",
         "repo": "https://github.com/dsh-market/dsh-market",
-        "description": "Visual plugin market inside DeepSeek Harness — browse, search, and one-click install community plugins.",
+        "description": "The plugin market inside DeepSeek Harness — browse, search, one-click install · DSH 可视化插件市场",
         "recommended": true,
         "checked": true,
         "version": "latest"
@@ -164,67 +164,103 @@
         "id": "dsh-better-sidebar",
         "spec": "dsh-better-sidebar",
         "name": "DSH Better Sidebar",
-        "description": "A VSCode-like right sidebar (explorer / editor / terminal / git / browser), isolated per conversation session. Exposes a service for other plugins to register sidebar tabs and file viewers.",
+        "description": "开放的侧边栏底座，支持三方拓展注册新侧边栏页面。内置文件渲染编辑/终端/侧边对话/Git/子代理页面 ｜ Open sidebar foundation, supports third-party extensions to register new sidebar pages. Built-in file rendering/editing, terminal, side chat, Git, and sub-agent pages.",
         "repo": "https://github.com/omdsh-dev/DSH-better-sidebar",
         "recommended": true,
         "checked": true,
         "version": [
-          { "version": "^0.19.1", "dsh": "^0.1.5-rc.1" },
-          { "version": "^0.21.1", "dsh": "^0.1.7-rc.1" },
-          { "version": "latest", "dsh": "^0.2.0-rc.1" }
+          {
+            "version": "^0.19.1",
+            "dsh": "^0.1.5-rc.1"
+          },
+          {
+            "version": "^0.21.1",
+            "dsh": "^0.1.7-rc.1"
+          },
+          {
+            "version": "latest",
+            "dsh": "^0.2.0-rc.1"
+          }
         ]
       },
       {
         "id": "dsh-rewind-plugin",
         "spec": "dsh-rewind-plugin",
         "name": "DSH Rewind",
-        "description": "In-window conversation rewind that never forks a new session, with a lightweight workspace backup that restores files together with the rewind.",
+        "description": "便捷无感的同窗口内对话回退，从不新建分支；自带轻量工作区备份，可一并还原文件（Claude Code /rewind 语义）。 · DSH plugin: effortless in-window conversation rewind — never forking a new session; ships a lightweight workspace backup that restores files together with the rewind (Claude Code /rewind semantics).",
         "repo": "https://github.com/SiriLee/dsh-rewind",
         "recommended": true,
         "checked": true,
         "version": [
-          { "version": "^0.12.2", "dsh": "^0.1.5-rc.1" },
-          { "version": "^0.14.0", "dsh": "^0.1.7-rc.1" },
-          { "version": "latest", "dsh": "^0.2.0-rc.1" }
-        ]
-      },
-      {
-        "id": "@wenbin_wb/dsh-bridge",
-        "spec": "@wenbin_wb/dsh-bridge",
-        "name": "DSH Bridge",
-        "description": "Remote access and security guard for a local DeepSeek Harness: LAN QR-code connect, Cloudflare or self-hosted public tunnels, and full-lifecycle WeChat / QQ / Feishu / Telegram bot conversations, with built-in access authentication and tamper safeguards.",
-        "repo": "https://github.com/wenbin-wb/dsh-bridge",
-        "recommended": true,
-        "checked": false,
-        "version": [
-          { "version": "^2.11.0", "dsh": "^0.1.5-rc.1" },
-          { "version": "^2.11.3", "dsh": "^0.1.7-rc.1" },
-          { "version": "latest", "dsh": "^0.2.0-rc.1" }
-        ]
-      },
-      {
-        "id": "@xmanrui/dsh-im",
-        "spec": "@xmanrui/dsh-im",
-        "name": "DSH IM",
-        "description": "Connect IM channels (WeChat, Feishu, DingTalk, WeCom, QQ, Slack, Telegram, Discord, WhatsApp, iMessage and more) plus a public AI Office to a local DeepSeek Harness, with bot management in the desktop sidebar.",
-        "repo": "https://github.com/xmanrui/dsh-im",
-        "recommended": true,
-        "checked": false,
-        "version": [
-          { "version": "^4.25.0", "dsh": "^0.1.5-rc.1" },
-          { "version": "^4.29.0", "dsh": "^0.1.7-rc.1" },
-          { "version": "latest", "dsh": "^0.2.0-rc.1" }
+          {
+            "version": "^0.12.2",
+            "dsh": "^0.1.5-rc.1"
+          },
+          {
+            "version": "^0.14.0",
+            "dsh": "^0.1.7-rc.1"
+          },
+          {
+            "version": "latest",
+            "dsh": "^0.2.0-rc.1"
+          }
         ]
       },
       {
         "id": "billion-context",
         "spec": "billion-context",
         "name": "Billion Context",
-        "description": "Context compression for DeepSeek Harness: folds conversation history as it grows so long sessions keep running within a small context window, and restores folded content on demand via decompress / search_context.",
+        "description": "基本稳定可用 A context-compression plugin for small context windows (a 100K context is enough), token savings (5x fewer tokens), and month-long single sessions (billions of tokens).上下文压缩插件，兼顾小窗口(100k上下文足矣)省token(省5倍token)和超长会话(数月级别几十亿token单会话)。billion-context is all you need",
         "repo": "https://github.com/ranxianglei/billion-context",
-        "recommended": false,
+        "recommended": true,
         "checked": false,
         "version": "latest"
+      },
+      {
+        "id": "@wenbin_wb/dsh-bridge",
+        "spec": "@wenbin_wb/dsh-bridge",
+        "name": "DSH Bridge",
+        "description": "DeepSeek Harness 多通道远程访问与安全守护插件 | 局域网扫码直连、Cloudflare / 自建公网隧道、微信 / QQ / 飞书 / Telegram 机器人全生命周期对话 | 内置全协议访问安全认证、后台防篡改与容灾保命体系",
+        "repo": "https://github.com/wenbin-wb/dsh-bridge",
+        "recommended": false,
+        "checked": false,
+        "version": [
+          {
+            "version": "^2.11.0",
+            "dsh": "^0.1.5-rc.1"
+          },
+          {
+            "version": "^2.11.3",
+            "dsh": "^0.1.7-rc.1"
+          },
+          {
+            "version": "latest",
+            "dsh": "^0.2.0-rc.1"
+          }
+        ]
+      },
+      {
+        "id": "@xmanrui/dsh-im",
+        "spec": "@xmanrui/dsh-im",
+        "name": "DSH IM",
+        "description": "通过扫码或机器人凭据把IM机器人接入DeepSeek Harness（支持飞书、微信、钉钉、企业微信、QQ、Slack、Telegram、Discord和WhatsApp）。 Connect IM bots to DeepSeek Harness via QR code or credentials (9 channels).",
+        "repo": "https://github.com/xmanrui/dsh-im",
+        "recommended": true,
+        "checked": false,
+        "version": [
+          {
+            "version": "^4.25.0",
+            "dsh": "^0.1.5-rc.1"
+          },
+          {
+            "version": "^4.29.0",
+            "dsh": "^0.1.7-rc.1"
+          },
+          {
+            "version": "latest",
+            "dsh": "^0.2.0-rc.1"
+          }
+        ]
       }
     ]
   },

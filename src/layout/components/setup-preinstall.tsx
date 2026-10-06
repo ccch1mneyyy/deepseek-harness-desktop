@@ -1,6 +1,7 @@
+import type { IconComponent } from './loadable'
 import type { PluginProcess } from '@/store/modules/plugins'
 import type { PreinstallPlugin } from '@/store/modules/preinstall'
-import { ArrowUpRightFromSquare, Copy, PlugConnection, Xmark } from '@gravity-ui/icons'
+import { ArrowUpRightFromSquare, ArrowUturnCcwLeft, Comments, Copy, Cubes3Overlap, Globe, LayoutSideContentLeft, PlugConnection, ShoppingCart, Xmark } from '@gravity-ui/icons'
 import { Button, Card, Checkbox, Chip, ScrollShadow, Spinner, Switch, Typography } from '@heroui/react'
 import { useMount } from '@reause/core'
 import { invoke } from '@tauri-apps/api/core'
@@ -47,6 +48,16 @@ function initialCheckedSet(plugins: readonly PreinstallPlugin[], isFirstTime: bo
   }).map(p => p.id))
 }
 
+/** 预设插件标识 → 图标；清单新增预设时回落通用图标，不因缺映射而空白 */
+const PLUGIN_ICONS: Record<string, IconComponent | undefined> = {
+  'dshmarket': ShoppingCart,
+  'dsh-better-sidebar': LayoutSideContentLeft,
+  'dsh-rewind-plugin': ArrowUturnCcwLeft,
+  'billion-context': Cubes3Overlap,
+  '@wenbin_wb/dsh-bridge': Globe,
+  '@xmanrui/dsh-im': Comments,
+}
+
 /** 插件卡片：图标 + 名称 + 状态 chip 在顶，描述居中，开关居底部右侧 */
 function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRepo }: {
   plugin: PreinstallPlugin
@@ -58,15 +69,14 @@ function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRe
   onOpenRepo: (id: string) => void
 }) {
   const { t } = useTranslation()
+  const PluginIcon = PLUGIN_ICONS[plugin.id] ?? PlugConnection
 
   return (
     <Card
-      className={`h-[124px] gap-1 bg-panel2 p-3 shadow-none transition-colors ${plugin.unsupported ? 'opacity-60' : 'hover:border-line-strong'}`}
+      className={`h-[120px] gap-1 bg-panel2 p-3 shadow-none transition-colors ${plugin.unsupported ? 'opacity-60' : 'hover:border-line-strong'}`}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-info/10 text-info">
-          <PlugConnection className="size-3.5" />
-        </span>
+        <PluginIcon className="size-3.5" />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
           {plugin.name}
         </span>
@@ -86,7 +96,7 @@ function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRe
           </Chip>
         </If>
         <If cond={plugin.installed && !toUninstall}>
-          <Chip size="sm" variant="soft" color="success" className="shrink-0 font-medium">
+          <Chip size="sm" variant="soft" color="default" className="shrink-0 font-medium">
             {t('preinstall.installed')}
           </Chip>
         </If>
@@ -98,12 +108,12 @@ function PluginCard({ plugin, checked, toUninstall, disabled, onToggle, onOpenRe
       </div>
 
       <If cond={plugin.description !== ''}>
-        <Ellipsis lineClamp={2} className="text-[11px] leading-[17px] text-muted">
+        <Ellipsis lineClamp={2} className="text-[11px] leading-[17px] text-muted my-auto">
           {plugin.description}
         </Ellipsis>
       </If>
 
-      <div className="mt-auto flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <Button
           isIconOnly
           size="sm"
