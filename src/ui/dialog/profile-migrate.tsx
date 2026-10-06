@@ -1,9 +1,9 @@
 import type { PropsWithOverlays } from '@overlastic/react'
-import type { HarnessCore, MigrateReport, MigrationAnalysis, MigrationDataItem, MigrationDataKind, MigrationEntry, MigrationVerdict, Profile } from '@/types'
+import type { HarnessCore, MigrateReport, MigrationAnalysis, MigrationDataKind, MigrationVerdict, Profile } from '@/types'
 import { ArrowDown, ArrowRight, ArrowUp } from '@gravity-ui/icons'
 import { AlertDialog, Button, Checkbox, Chip, InputGroup, ListBox, Select, Spinner, Tabs } from '@heroui/react'
 import { useDisclosure } from '@overlastic/react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invoke } from '@tauri-apps/api/core'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -12,7 +12,7 @@ import { queryKeys } from '@/config/query-keys'
 import { useDshPluginsManager } from '@/hooks/use-plugins-manager'
 import { toast } from '@/utils/toast'
 
-/** 判定结果 → Chip 颜色与文案 key；带目标版本的判定只用颜色 + 方向 Icon，文案留给 aria-label */
+/** 判定结果 → Chip 颜色与文案 key */
 const VERDICT_CHIPS: Record<MigrationVerdict, { key: string, color: 'default' | 'accent' | 'success' | 'warning' | 'danger' }> = {
   compatible: { key: 'profiles.migrate_verdict_compatible', color: 'default' },
   upgrade: { key: 'profiles.migrate_verdict_upgrade', color: 'success' },
@@ -20,7 +20,7 @@ const VERDICT_CHIPS: Record<MigrationVerdict, { key: string, color: 'default' | 
   unknown: { key: 'profiles.migrate_verdict_unknown', color: 'warning' },
 }
 
-/** 档案级数据类别 → 源档案里的文件名；不存在于源档案的类目也会列出（置灰） */
+/** 档案级数据类别 → 源档案里的文件名 */
 const DATA_FILES: Record<MigrationDataKind, string> = {
   patch: 'cordis.patch.yml',
   disabled: 'disabled-plugins.json',
@@ -28,10 +28,10 @@ const DATA_FILES: Record<MigrationDataKind, string> = {
   credentials: '.credentials.yaml',
 }
 
-/** 数据项的列出顺序：凭据固定最后（风险最高，默认不勾选） */
+/** 数据项的列出顺序：凭据固定最后 */
 const DATA_ORDER: MigrationDataKind[] = ['patch', 'disabled', 'policy', 'credentials']
 
-/** 档案级数据类别 → 说明文案 key（带条目数的用 `{{count}}` 插值） */
+/** 档案级数据类别 → 说明文案 key */
 const DATA_LABEL_KEYS: Record<MigrationDataKind, string> = {
   patch: 'profiles.migrate_data_patch',
   disabled: 'profiles.migrate_data_disabled',
@@ -40,12 +40,7 @@ const DATA_LABEL_KEYS: Record<MigrationDataKind, string> = {
 }
 
 /**
- * 「迁移档案数据」对话框：把来源档案（对话框内选择）的插件与档案级数据并入当前档案。
- *
- * - 来源档案从档案列表里选（当前使用中的档案是固定目标，不可更改）；判定基准 = 当前核心版本。
- * - 插件走既有安装管线（`manager.install`），因此授权气泡与重启提示与插件面板一致；
- *   不兼容条目由后端给出应升级/降级到的版本，安装时仍按既有流程要求授权。
- * - 档案级数据由后端做纯增量合并（目标已有的条目一律不动，源档案保持原样）。
+ * 「迁移档案数据」对话框组件
  */
 export function ProfileMigrateDialog(props: PropsWithOverlays) {
   const disclosure = useDisclosure({ props })
@@ -53,6 +48,7 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
   const queryClient = useQueryClient()
   const manager = useDshPluginsManager()
 
+  // 1. 数据查询 (Queries)
   const { data: cores } = useQuery({
     queryKey: queryKeys.cores,
     queryFn: () => invoke<HarnessCore[]>('get_cores'),
@@ -62,113 +58,90 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
     queryFn: () => invoke<Profile[]>('get_profiles'),
   })
 
-  const profiles = profileList ?? []
-  const target = profiles.find(profile => profile.active)
-  const sources = profiles.filter(profile => !profile.active)
-
+  // 2. 本地用户选择状态
   const [pickedSourceId, setPickedSourceId] = useState('')
+  const [pluginOverrides, setPluginOverrides] = useState<Record<string, boolean>>({})
+  const [dataOverrides, setDataOverrides] = useState<Record<string, boolean>>({})
 
+  // 3. 档案迁移分析数据 Query
   const { data: analysis, isLoading, error } = useQuery({
     queryKey: queryKeys.profileMigration(pickedSourceId),
     queryFn: () => invoke<MigrationAnalysis>('analyze_profile_migration', { sourceId: pickedSourceId }),
-    enabled: pickedSourceId !== '',
+    enabled: Boolean(pickedSourceId),
   })
 
-  const [pluginOverrides, setPluginOverrides] = useState<Record<string, boolean>>({})
-  const [dataOverrides, setDataOverrides] = useState<Record<string, boolean>>({})
-  const [busy, setBusy] = useState(false)
+  // 4. 派生数据提取与 Map 索引构造 (常数级别 O(1) 查找)
+  const profiles = profileList ?? []
+  const target = profiles.find(profile => profile.active)
+  const sources = profiles.filter(profile => !profile.active)
 
   const activeCore = cores?.find(core => core.active)
   const coreVersion = activeCore ? activeCore.version || activeCore.tag : ''
   const plugins = analysis?.plugins ?? []
   const dataItems = analysis?.data ?? []
 
-  /** 目标档案里同名插件的已装版本；null = 未安装 */
-  function installedVersion(id: string): string | null {
-    return manager.installed.find(plugin => plugin.id === id)?.version ?? null
-  }
+  const installedMap = new Map(manager.installed.map(p => [p.id, p.version]))
+  const dataItemMap = new Map(dataItems.map(item => [item.kind, item]))
 
-  /** 源档案里的这一类数据；undefined = 源档案没有这个文件 */
-  function dataItem(kind: MigrationDataKind): MigrationDataItem | undefined {
-    return dataItems.find(item => item.kind === kind)
-  }
+  // 筛选已选中的插件与数据项
+  const pickedPlugins = plugins.filter(entry => pluginOverrides[entry.id] ?? true)
+  const pickedData = DATA_ORDER.filter(kind =>
+    dataOverrides[kind] ?? (dataItemMap.has(kind) && kind !== 'credentials'),
+  )
 
-  /** 默认全部勾选（含目标已装的，勾选后按来源版本改写）；用户显式切换过的一律以用户为准 */
-  function pluginPicked(entry: MigrationEntry): boolean {
-    return pluginOverrides[entry.id] ?? true
-  }
+  // 5. 使用 useMutation 封装迁移提交流程
+  const { mutate: handleMigrate, isPending: busy } = useMutation({
+    mutationFn: async () => {
+      const specs = pickedPlugins.map(entry => entry.spec)
+      const kinds = pickedData
 
-  /** 默认勾选：源档案里存在、且不是凭据的数据项（凭据可能含敏感信息，必须显式勾选） */
-  function dataPicked(kind: MigrationDataKind): boolean {
-    return dataOverrides[kind] ?? (dataItem(kind) !== undefined && kind !== 'credentials')
-  }
-
-  const pickedPlugins = plugins.filter(pluginPicked)
-  const pickedData = DATA_ORDER.filter(dataPicked)
-  const canSubmit = !busy && pickedSourceId !== '' && (pickedPlugins.length > 0 || pickedData.length > 0)
-
-  function togglePlugin(id: string, next: boolean) {
-    setPluginOverrides(previous => ({ ...previous, [id]: next }))
-  }
-
-  function toggleData(kind: MigrationDataKind, next: boolean) {
-    setDataOverrides(previous => ({ ...previous, [kind]: next }))
-  }
-
-  function verdictLabel(entry: MigrationEntry): string {
-    const chip = VERDICT_CHIPS[entry.verdict]
-    return entry.targetVersion
-      ? t(chip.key, { version: entry.targetVersion })
-      : t(chip.key)
-  }
-
-  function dataLabel(kind: MigrationDataKind): string {
-    const item = dataItem(kind)
-    if (item === undefined || item.count === undefined)
-      return t(DATA_LABEL_KEYS[kind], { count: '0' })
-    return t(DATA_LABEL_KEYS[kind], { count: item.count })
-  }
-
-  async function submit() {
-    if (!canSubmit)
-      return
-    const specs = pickedPlugins.map(entry => entry.spec)
-    const kinds = pickedData
-    setBusy(true)
-    try {
+      // 阶段 A: 迁移档案数据
       if (kinds.length > 0) {
         const report = await invoke<MigrateReport>('migrate_profile_data', {
           sourceId: pickedSourceId,
           items: kinds,
         })
         if (report.failures.length > 0) {
-          const detail = report.failures.map(failure => dataLabel(failure.kind)).join('、')
+          const detail = report.failures
+            .map((f) => {
+              const count = dataItemMap.get(f.kind)?.count ?? '0'
+              return t(DATA_LABEL_KEYS[f.kind], { count })
+            })
+            .join('、')
           toast(t('profiles.migrate_partial'), { variant: 'danger', description: detail })
         }
       }
+
+      // 阶段 B: 安装插件
       let failed = 0
       if (specs.length > 0) {
         const results = await manager.install(specs)
         failed = results.filter(result => !result.ok).length
       }
+
+      return { totalCount: specs.length + kinds.length, failedCount: failed }
+    },
+    onSuccess: ({ totalCount, failedCount }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins })
-      if (failed > 0) {
-        toast(t('profiles.migrate_plugin_failed', { count: failed }), { variant: 'danger' })
+
+      if (failedCount > 0) {
+        toast(t('profiles.migrate_plugin_failed', { count: failedCount }), { variant: 'danger' })
       }
       else {
-        toast(t('profiles.migrate_success', { count: specs.length + kinds.length }), {
+        toast(t('profiles.migrate_success', { count: totalCount }), {
           variant: 'accent',
           description: t('profiles.migrate_success_hint'),
         })
       }
       disclosure.confirm()
-    }
-    catch (err) {
+    },
+    onError: (err) => {
       console.error('[ProfileMigrateDialog] migrate failed:', err)
       toast(t('profiles.migrate_failed'), { variant: 'danger', description: String(err) })
-      setBusy(false)
-    }
-  }
+    },
+  })
+
+  const canSubmit = !busy && Boolean(pickedSourceId) && (pickedPlugins.length > 0 || pickedData.length > 0)
 
   return (
     <AlertDialog onOpenChange={disclosure.cancel} isOpen={disclosure.visible}>
@@ -182,6 +155,8 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
             </AlertDialog.Header>
             <AlertDialog.Body className="space-y-4">
               <p className="text-xs leading-[1.7] text-muted">{t('profiles.migrate_desc')}</p>
+
+              {/* 源档案与目标档案选择 */}
               <div className="flex justify-between items-center gap-3">
                 <Select
                   variant="secondary"
@@ -206,20 +181,20 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                     </ListBox>
                   </Select.Popover>
                 </Select>
+
                 <ArrowRight className="size-4 shrink-0 text-muted" />
+
                 <div className="flex-1">
                   <InputGroup fullWidth variant="secondary" className="relative">
-                    <InputGroup.Input
-                      disabled
-                      className="min-w-0"
-                      value={target?.name ?? ''}
-                    />
+                    <InputGroup.Input disabled className="min-w-0" value={target?.name ?? ''} />
                     <InputGroup.Suffix className="absolute right-0">
                       <Chip className="rounded-sm" color="success" variant="soft">{coreVersion}</Chip>
                     </InputGroup.Suffix>
                   </InputGroup>
                 </div>
               </div>
+
+              {/* 迁移分析结果 */}
               <If
                 cond={pickedSourceId}
                 else={(
@@ -250,104 +225,123 @@ export function ProfileMigrateDialog(props: PropsWithOverlays) {
                         </Tabs.Tab>
                       </Tabs.List>
                     </Tabs.ListContainer>
+
+                    {/* 插件列表面板 */}
                     <Tabs.Panel id="plugins">
                       <If
                         cond={plugins.length === 0}
                         then={<p className="py-4 text-sm text-muted">{t('profiles.migrate_plugins_empty')}</p>}
-                        else={plugins.map(entry => (
-                          <label key={entry.id} className="flex cursor-pointer items-center gap-2 py-1.5">
+                        else={plugins.map((entry) => {
+                          const currentVersion = installedMap.get(entry.id)
+                          const chip = VERDICT_CHIPS[entry.verdict]
+                          const chipText = entry.targetVersion ? t(chip.key, { version: entry.targetVersion }) : t(chip.key)
+                          const isPicked = pluginOverrides[entry.id] ?? true
+
+                          return (
+                            <div key={entry.id} className="flex justify-between items-center py-1.5">
+                              <Checkbox
+                                isSelected={isPicked}
+                                isDisabled={busy}
+                                onChange={(value: boolean) => setPluginOverrides(prev => ({ ...prev, [entry.id]: value }))}
+                                aria-label={entry.id}
+                                className="shrink-0"
+                              >
+                                <Checkbox.Content>
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink">
+                                    {entry.id}
+                                    @
+                                    {entry.version}
+                                  </span>
+                                </Checkbox.Content>
+                              </Checkbox>
+
+                              <div className="flex items-center gap-2">
+                                <If cond={currentVersion !== undefined}>
+                                  <Chip size="sm" variant="soft">
+                                    {t('profiles.migrate_installed', { version: currentVersion })}
+                                  </Chip>
+                                </If>
+
+                                <If
+                                  cond={entry.targetVersion !== undefined}
+                                  then={(
+                                    <Chip size="sm" color={chip.color} variant="soft" aria-label={chipText}>
+                                      <If
+                                        cond={entry.verdict === 'upgrade'}
+                                        then={<ArrowUp className="size-2.5" />}
+                                        else={<ArrowDown className="size-2.5" />}
+                                      />
+                                      {entry.targetVersion}
+                                    </Chip>
+                                  )}
+                                  else={(
+                                    <Chip size="sm" color={chip.color} variant="soft">
+                                      {chipText}
+                                    </Chip>
+                                  )}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      />
+                    </Tabs.Panel>
+
+                    {/* 档案数据面板 */}
+                    <Tabs.Panel id="data">
+                      {DATA_ORDER.map((kind) => {
+                        const item = dataItemMap.get(kind)
+                        const hasItem = item !== undefined
+                        const isPicked = dataOverrides[kind] ?? (hasItem && kind !== 'credentials')
+                        const labelText = t(DATA_LABEL_KEYS[kind], { count: item?.count ?? '0' })
+
+                        return (
+                          <div key={kind} className="flex items-center justify-between py-1.5">
                             <Checkbox
-                              isSelected={pluginPicked(entry)}
-                              isDisabled={busy}
-                              onChange={(value: boolean) => togglePlugin(entry.id, value)}
-                              aria-label={entry.id}
-                              className="shrink-0"
+                              isSelected={isPicked}
+                              isDisabled={busy || !hasItem}
+                              onChange={(value: boolean) => setDataOverrides(prev => ({ ...prev, [kind]: value }))}
+                              aria-label={kind}
                             >
                               <Checkbox.Content>
                                 <Checkbox.Control>
                                   <Checkbox.Indicator />
                                 </Checkbox.Control>
-                                <span className="min-w-0 flex-1 truncate font-mono text-sm text-ink">
-                                  {entry.id}
-                                  @
-                                  {entry.version}
+                                <span className="text-[12.5px]">
+                                  {DATA_FILES[kind]}
                                 </span>
+                                <If cond={!hasItem}>
+                                  <span className="text-xs text-muted">{t('profiles.migrate_data_absent')}</span>
+                                </If>
                               </Checkbox.Content>
                             </Checkbox>
 
-                            <If cond={installedVersion(entry.id) !== null}>
-                              <Chip size="sm" variant="soft">
-                                {t('profiles.migrate_installed', { version: installedVersion(entry.id) ?? '' })}
-                              </Chip>
-                            </If>
-                            <If
-                              cond={entry.targetVersion !== undefined}
-                              then={(
-                                <Chip
-                                  size="sm"
-                                  color={VERDICT_CHIPS[entry.verdict].color}
-                                  variant="soft"
-                                  aria-label={verdictLabel(entry)}
-                                >
-                                  <If
-                                    cond={entry.verdict === 'upgrade'}
-                                    then={<ArrowUp className="size-2.5" />}
-                                    else={<ArrowDown className="size-2  .5" />}
-                                  />
-                                  {entry.targetVersion}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted">{labelText}</span>
+                              <If cond={kind === 'credentials'}>
+                                <Chip size="sm" color="danger" variant="soft">
+                                  {t('profiles.migrate_credentials_badge')}
                                 </Chip>
-                              )}
-                              else={(
-                                <Chip size="sm" color={VERDICT_CHIPS[entry.verdict].color} variant="soft">
-                                  {verdictLabel(entry)}
-                                </Chip>
-                              )}
-                            />
-                          </label>
-                        ))}
-                      />
-                    </Tabs.Panel>
-                    <Tabs.Panel id="data" className="">
-                      {DATA_ORDER.map(kind => (
-                        <div key={kind} className="flex items-center gap-2 py-1">
-                          <Checkbox
-                            isSelected={dataPicked(kind)}
-                            isDisabled={busy || dataItem(kind) === undefined}
-                            onChange={(value: boolean) => toggleData(kind, value)}
-                            aria-label={kind}
-                          >
-                            <Checkbox.Content>
-                              <Checkbox.Control>
-                                <Checkbox.Indicator />
-                              </Checkbox.Control>
-                              <span className="text-sm">
-                                {DATA_FILES[kind]}
-                              </span>
-                              <If cond={dataItem(kind) === undefined}>
-                                <span className="text-xs text-muted">{t('profiles.migrate_data_absent')}</span>
                               </If>
-                            </Checkbox.Content>
-                          </Checkbox>
-                          <div className="flex-1" />
-                          <span className="text-xs text-muted">{dataLabel(kind)}</span>
-                          <If cond={kind === 'credentials'}>
-                            <Chip size="sm" color="danger" variant="soft">
-                              {t('profiles.migrate_credentials_badge')}
-                            </Chip>
-                          </If>
-                        </div>
-                      ))}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </Tabs.Panel>
                   </Tabs>
                 </If>
               </If>
             </AlertDialog.Body>
+
             <AlertDialog.Footer className="justify-end">
               <div className="flex flex-row items-center gap-2">
                 <Button variant="tertiary" isDisabled={busy} onPress={disclosure.cancel}>
                   {t('buttons.cancel')}
                 </Button>
-                <Button variant="primary" isDisabled={!canSubmit} onPress={submit}>
+                <Button variant="primary" isDisabled={!canSubmit} onPress={() => handleMigrate()}>
                   <If cond={busy} then={<Spinner size="sm" color="current" />} />
                   <If cond={busy} then={<span>{t('profiles.migrate_busy')}</span>} else={<span>{t('profiles.migrate_confirm')}</span>} />
                 </Button>

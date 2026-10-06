@@ -9,6 +9,7 @@
 | **基础通用** | 所有代码修改 | `docs/specs/devlopment.md` |
 | **测试标准** | 通用 Unit Test、E2E 集成测试断言与结构 | `docs/specs/testing.md` |
 | **桌面端 - 基础架构** | 桌面端主进程、Shell 基础、GUI 渲染核心 | `docs/specs/desktop.baisc.md` |
+| **桌面端 - UI 组件** | 设置面板 / 对话框等前端组件的内部分区、派生数据与提交动作组织 | `docs/specs/desktop.ui.md` |
 | **桌面端 - 测试验证** | 桌面端 E2E 测试、UI 单元测试、桌面功能测试 | `docs/specs/desktop.test.md` |
 | **插件 - 基础架构** | 插件常量归属、跨侧共享约定与退级策略 | `docs/specs/plugin.baisc.md` |
 | **插件 - 客户端核心** | 插件 Client 通信、状态管理与客户端逻辑 | `docs/specs/plugin.client.md` |
