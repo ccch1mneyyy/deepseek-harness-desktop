@@ -594,6 +594,9 @@ export const plugins = defineStore({
         failed > 0 ? i18next.t('plugins.queue_summary_failed', { count: failed }) : '',
         noop > 0 ? i18next.t('plugins.queue_summary_skipped', { count: noop }) : '',
       ].filter(part => part !== '')
+      // 每一项都是用户自己的选择时没有任何收支可报，别弹一条空汇总气泡追问他。
+      if (parts.length === 0)
+        return
       restartKey = toast(i18next.t('plugins.queue_summary'), {
         description: parts.join(' · '),
         variant: failed > 0 ? 'danger' : restart ? 'accent' : 'default',

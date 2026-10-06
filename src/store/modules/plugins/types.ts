@@ -73,7 +73,7 @@ export interface PluginManagerLog {
   processId?: string
 }
 
-export type PluginSearchProblem = 'invalid-spec' | 'not-found' | 'local-missing' | 'network' | 'unsupported' | 'unknown'
+export type PluginSearchProblem = 'not-found' | 'local-missing' | 'network' | 'unsupported' | 'unknown'
 
 export interface PluginSearchResult {
   spec: string

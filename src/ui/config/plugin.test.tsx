@@ -363,6 +363,53 @@ describe('local plugin folder picking', () => {
   })
 })
 
+describe('incompatible plugin install', () => {
+  /** 不兼容的 spec 必须照样入队：授权气泡由管理器弹，面板不能提前拦截成一条错误提示。 */
+  it('still hands an incompatible spec to the manager instead of failing it at the panel', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'dsh-a', name: 'dsh-a', version: '1.0.0', compatible: false },
+    ])
+    render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'dsh-a' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    await waitFor(() => expect(manager.install).toHaveBeenCalledExactlyOnceWith(['dsh-a']))
+    // 面板既不拦也不报错：授权与否留给管理器那条气泡。
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  it('shows the resolved version of an incompatible spec without blocking the install', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'dsh-a', name: 'dsh-a', version: '1.0.0', compatible: false },
+    ])
+    render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'dsh-a' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    expect(await screen.findByText('plugins.search_incompatible_badge')).toBeTruthy()
+    expect(manager.install).toHaveBeenCalledWith(['dsh-a'])
+  })
+})
+
+describe('non-registry spec search results', () => {
+  /** 宿主对 `github:` 简写与 git URL 不做 registry 解析，面板只转述它给出的结论，不得自己判定 spec 非法。 */
+  it('renders a github spec without a problem label and still installs it', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'github:MengYuil/dsh-ponytail', compatible: null },
+    ])
+    const { container } = render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'github:MengYuil/dsh-ponytail' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    await waitFor(() => expect(manager.install).toHaveBeenCalledExactlyOnceWith(['github:MengYuil/dsh-ponytail']))
+    expect(container.querySelector('.text-danger')).toBeNull()
+    expect(screen.getByText('github:MengYuil/dsh-ponytail')).toBeTruthy()
+  })
+})
+
 describe('local plugin hot reload switch', () => {
   it('hides the whole hot reload block unless advanced options are enabled', () => {
     hmrStatus.data = { enabled: true, watching: false, patchPath: null, roots: [] }
