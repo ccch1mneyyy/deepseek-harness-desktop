@@ -159,7 +159,7 @@ Consultá la [guía en inglés](<./docs/DEVELOPMENT.md>) o la [guía en chino](<
 
 - [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) — plataforma agent `dsh` oficial
 - [deepseek-harness-pkg](https://github.com/dsh-tauri/deepseek-harness-pkg) — distribuciones Harness prearmadas y fuente de descarga
-- [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) · [dsh-pet-mov](https://github.com/dsh-tauri/dsh-pet-mov) · [dsh-pet-component](https://github.com/hairyf/dsh-pet-component) — recursos y render de mascotas
+- [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) · [dsh-pet-mov](https://github.com/dsh-tauri/dsh-pet-mov) · [dsh-pet-component](https://github.com/dsh-tauri/dsh-pet-component) — recursos y render de mascotas
 - [dsh-plugin-codex-pets](https://github.com/Skylarking/dsh-plugin-codex-pets) · [BongoCat](https://github.com/ayangweb/BongoCat) · [dsh-dafeiyu](https://github.com/QCYTSN/dsh-dafeiyu) · [codex-to-dsh-pet](https://github.com/Signalight/codex-to-dsh-pet) — proyectos de referencia de mascotas
 
 ## Licencia

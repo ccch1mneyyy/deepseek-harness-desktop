@@ -184,8 +184,8 @@ catalogs:
       specifier: ^5.101.4
       version: 5.101.4
     dsh-pet-component:
-      specifier: ^0.2.3
-      version: 0.2.3
+      specifier: ^0.2.4
+      version: 0.2.4
     i18next:
       specifier: ^26.3.6
       version: 26.3.6
@@ -358,7 +358,7 @@ importers:
         version: 2.4.4
       dsh-pet-component:
         specifier: catalog:runtime
-        version: 0.2.3(change-case@5.4.4)(react@19.2.8)
+        version: 0.2.4(change-case@5.4.4)(react@19.2.8)
       i18next:
         specifier: catalog:runtime
         version: 26.3.6(typescript@5.8.3)
@@ -4285,8 +4285,8 @@ packages:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
-  dsh-pet-component@0.2.3:
-    resolution: {integrity: sha512-KjvhYQ6IR8TlhLrQxxXco+IA/AytEuqGrL0FcLGBM+J1StQh5EC1Y7hcmI7pN79mhqg36LxTfChahcOXtmC4bw==}
+  dsh-pet-component@0.2.4:
+    resolution: {integrity: sha512-q8HIQX7sx47Rb53g67YXWgNOlFFDooXNvxAAkYW6Nhzyu1mGnTjZ14cGsuD5QKumxVnG5yE8yvR2SqWnk1DEKQ==}
     peerDependencies:
       react: ^19.0.0
 
@@ -9928,7 +9928,7 @@ snapshots:
 
   dotenv@17.4.2: {}
 
-  dsh-pet-component@0.2.3(change-case@5.4.4)(react@19.2.8):
+  dsh-pet-component@0.2.4(change-case@5.4.4)(react@19.2.8):
     dependencies:
       '@gravity-ui/icons': 2.21.0(react@19.2.8)
       '@reause/core': 0.1.7(react@19.2.8)
