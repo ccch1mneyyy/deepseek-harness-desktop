@@ -42,7 +42,7 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
   const edges: Edge[] = ['top']
   if (Platform.OS !== 'ios')
     edges.push('bottom')
-  const shim = createNotificationShim(address.id, nonce)
+  const shim = createNotificationShim(address.id, nonce, edges)
   // keep:effect Mirror native visibility into the authenticated loaded document.
   useEffect(() => {
     if (!documentReady || state.loadError)

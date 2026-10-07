@@ -412,19 +412,19 @@ describe('rendered Home scanning and idle actions', () => {
 })
 
 describe('rendered Home connection drawer', () => {
-  it('uses the right slide drawer across the whole page and presents only five recent hosts with accessible status', async () => {
+  it('opens the right slide drawer only from its screen edge and presents five recent hosts with accessible status', async () => {
     hydrate(history)
     connection.cancelScan()
     connection.setHealth('http://one.local:3080', 'available')
     connection.setHealth('http://two.local:3080', 'unavailable')
     holdNetwork()
     await mount()
-    expect(drawer().props).toMatchObject({ drawerPosition: 'right', drawerType: 'slide', direction: 'ltr', swipeEdgeWidth: 440, drawerStyle: { width: 384 } })
+    expect(drawer().props).toMatchObject({ drawerPosition: 'right', drawerType: 'slide', direction: 'ltr', swipeEdgeWidth: 32, swipeEnabled: true, drawerStyle: { width: 384 } })
     native.dimensions = { width: 320, height: 640 }
     await act(async () => {
       screen!.update(createElement(HomeScreen))
     })
-    expect(drawer().props.swipeEdgeWidth).toBe(320)
+    expect(drawer().props.swipeEdgeWidth).toBe(32)
     expect(drawer().props.drawerStyle.width).toBeCloseTo(281.6)
 
     await press('最近连接')
@@ -442,6 +442,24 @@ describe('rendered Home connection drawer', () => {
     expect(texts()).not.toContain('seven.local:3080')
     expect(button('断开连接').props.isDisabled).toBe(true)
     expect(button('重新连接').props.isDisabled).toBe(true)
+  })
+
+  it('matches the scan and refresh icon button sizes without changing their accessible actions', async () => {
+    hydrate()
+    connection.cancelScan()
+    await mount()
+    await press('最近连接')
+
+    const scan = button('扫码连接')
+    const refresh = button('刷新最近连接')
+    expect(scan.props).toMatchObject({ variant: 'ghost', size: 'sm', isIconOnly: true, isDisabled: false })
+    expect(refresh.props).toMatchObject({ variant: 'ghost', size: 'sm', isIconOnly: true, isDisabled: false })
+    expect(scan.find(node => String(node.type) === 'ScanLineIcon').props.size).toBe(18)
+    expect(refresh.find(node => String(node.type) === 'RefreshIcon').props.size).toBe(18)
+
+    await press('扫码连接')
+    expect(native.push).toHaveBeenCalledExactlyOnceWith('/scan')
+    expect(drawer().props.open).toBe(false)
   })
 
   it('keeps the connected page free of permanent drawer controls before and after its full-screen first-use guide', async () => {

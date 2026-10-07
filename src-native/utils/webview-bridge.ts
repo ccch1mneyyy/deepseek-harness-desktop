@@ -1,3 +1,4 @@
+import type { Edge } from 'react-native-safe-area-context'
 import type { NativeNotificationMessage } from './notification-policy'
 import { FOCUS_RETRY_INTERVAL_MS, FOCUS_TIMEOUT_MS } from '@/config/constants'
 import { isRecord, isTrustedOrigin } from './bridge-protocol'
@@ -56,18 +57,23 @@ export function parseNativeMessage(raw: string, nativeUrl: string, expectedOrigi
   }
 }
 
-export function createNotificationShim(origin: string, nonce: string): string {
+export function createNotificationShim(origin: string, nonce: string, nativeSafeAreaEdges: readonly Edge[] = []): string {
+  const safeAreaStyle = nativeSafeAreaEdges.length
+    ? `:root { ${nativeSafeAreaEdges.map(edge => `--dsh-mobile-safe-area-inset-${edge}: 0px;`).join(' ')} } `
+    : ''
   return `
 (function () {
   var expectedOrigin = ${JSON.stringify(origin)};
   var nonce = ${JSON.stringify(nonce)};
   if (window.top !== window || location.origin !== expectedOrigin) return;
   function suppressTapHighlight() {
-    if (document.getElementById('dsh-bridge-tap-highlight')) return;
-    var style = document.createElement('style');
-    style.id = 'dsh-bridge-tap-highlight';
-    style.textContent = '* { -webkit-tap-highlight-color: transparent; }';
-    (document.head || document.documentElement).appendChild(style);
+    var style = document.getElementById('dsh-bridge-tap-highlight');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'dsh-bridge-tap-highlight';
+      (document.head || document.documentElement).appendChild(style);
+    }
+    style.textContent = ${JSON.stringify(`${safeAreaStyle}* { -webkit-tap-highlight-color: transparent; }`)};
   }
   if (document.documentElement) suppressTapHighlight();
   else document.addEventListener('DOMContentLoaded', suppressTapHighlight, { once: true });

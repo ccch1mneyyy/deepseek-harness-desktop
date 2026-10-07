@@ -44,8 +44,8 @@ function ConnectionDrawer() {
     <SafeAreaView style={{ flex: 1, backgroundColor: background }} edges={['top', 'bottom', 'right']}>
       <View className="flex-row items-center justify-between px-5 pb-1 pt-2">
         <Text className="text-xl font-semibold text-foreground">{t('connection.connectionInfo')}</Text>
-        <Button variant="ghost" isIconOnly isDisabled={!state.hydrated} accessibilityLabel={t('scan.scanQr')} onPress={openScanner}>
-          <ScanLine size={22} color={foreground} />
+        <Button variant="ghost" size="sm" isIconOnly isDisabled={!state.hydrated} accessibilityLabel={t('scan.scanQr')} onPress={openScanner}>
+          <ScanLine size={18} color={foreground} />
         </Button>
       </View>
       <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 20, gap: 24, paddingBottom: 24 }}>
@@ -191,7 +191,7 @@ export default function HomeScreen() {
       drawerStyle={{ width: Math.min(width * 0.88, 384), backgroundColor: background }}
       overlayStyle={{ backgroundColor: backdrop }}
       overlayAccessibilityLabel={t('connection.closeDrawer')}
-      swipeEdgeWidth={width}
+      swipeEdgeWidth={32}
       swipeEnabled={state.hydrated}
       renderDrawerContent={() => <ConnectionDrawer />}
       style={{ flex: 1 }}

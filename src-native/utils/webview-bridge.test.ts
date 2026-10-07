@@ -303,9 +303,28 @@ describe('trusted WebView theme and touch styling', () => {
     expect(browser.posts).not.toHaveBeenCalled()
   })
 
-  it('defers touch styling until the root exists when injected before HTML content', () => {
+  it('updates native safe-area ownership before the same-nonce early return without replacing the bridge', () => {
+    const browser = createBrowser()
+    const Notification = browser.inject()
+    const receive = browser.window.__dshBridgeReceive
+    const style = browser.styles.get('dsh-bridge-tap-highlight')
+    const script = createNotificationShim(origin, nonce, ['top', 'bottom'])
+    expect(browser.run(script)).toBe(true)
+    expect(style?.textContent).toContain(':root { --dsh-mobile-safe-area-inset-top: 0px; --dsh-mobile-safe-area-inset-bottom: 0px; }')
+    expect(browser.styles.size).toBe(1)
+    expect(browser.styles.get('dsh-bridge-tap-highlight')).toBe(style)
+    expect(browser.document.createElement).toHaveBeenCalledExactlyOnceWith('style')
+    expect(browser.window.Notification).toBe(Notification)
+    expect(browser.window.__dshBridgeReceive).toBe(receive)
+    style?.remove()
+    expect(browser.run(script)).toBe(true)
+    expect(browser.styles.get('dsh-bridge-tap-highlight')?.textContent).toBe(style?.textContent)
+    expect(browser.window.__dshBridgeReceive).toBe(receive)
+  })
+
+  it('defers touch and safe-area styling until the root exists when injected before HTML content', () => {
     const browser = createBrowser({ rootAvailable: false, readyState: 'loading' })
-    browser.inject()
+    expect(browser.run(createNotificationShim(origin, nonce, ['top']))).toBe(true)
     expect(browser.styles.size).toBe(0)
     expect(browser.document.createElement).not.toHaveBeenCalled()
     browser.document.documentElement = browser.documentElement
@@ -314,7 +333,9 @@ describe('trusted WebView theme and touch styling', () => {
     browser.document.dispatchEvent(new Event('DOMContentLoaded'))
     browser.document.dispatchEvent(new Event('DOMContentLoaded'))
 
-    expect(browser.styles.get('dsh-bridge-tap-highlight')?.textContent).toBe('* { -webkit-tap-highlight-color: transparent; }')
+    expect(browser.styles.get('dsh-bridge-tap-highlight')?.textContent).toContain('--dsh-mobile-safe-area-inset-top: 0px;')
+    expect(browser.styles.get('dsh-bridge-tap-highlight')?.textContent).not.toContain('--dsh-mobile-safe-area-inset-bottom')
+    expect(browser.styles.get('dsh-bridge-tap-highlight')?.textContent).toContain('* { -webkit-tap-highlight-color: transparent; }')
     expect(browser.styles.size).toBe(1)
     expect(browser.document.createElement).toHaveBeenCalledExactlyOnceWith('style')
   })
@@ -323,7 +344,7 @@ describe('trusted WebView theme and touch styling', () => {
     const browser = createBrowser(options)
     browser.documentElement.setAttribute('data-ds-theme-source', 'light')
     browser.window.__DSH_BOOT__ = {}
-    browser.run(createNotificationShim(origin, nonce))
+    browser.run(createNotificationShim(origin, nonce, ['top', 'bottom']))
 
     expect(browser.styles.size).toBe(0)
     expect(browser.document.createElement).not.toHaveBeenCalled()
