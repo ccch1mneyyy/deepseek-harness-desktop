@@ -15,6 +15,28 @@ describe('windows notification app identity icon', () => {
     expect(icon.readUInt32BE(20)).toBe(32)
   })
 
+  it('nightly uses a separate notification identity and its bundled icon', () => {
+    const nightly = JSON.parse(readFileSync(new URL('tauri.nightly.conf.json', tauriRoot), 'utf8'))
+    expect(nightly.identifier).toBe('dsh-tauri-nightly')
+    expect(nightly.productName).toBe('DSH Tauri Nightly')
+    expect(nightly.mainBinaryName).toBe('deepseek-harness-desktop-nightly')
+    expect(config.identifier).toBe('dsh-tauri')
+    expect(config.productName).toBe('DSH Tauri')
+    expect(nightly.plugins.notifications.windows.toastActivatorClsid).toBe('77B0D48C-22BB-46A8-B57D-895B403B3148')
+    expect(nightly.plugins.notifications.windows.toastActivatorClsid).not.toBe(config.plugins.notifications.windows.toastActivatorClsid)
+    expect(nightly.plugins.notifications.windows.iconPath).toBe('icons/nightly/32x32.png')
+    expect(nightly.bundle.resources).toContain('icons/nightly/32x32.png')
+    const icon = readFileSync(new URL('icons/nightly/32x32.png', tauriRoot))
+    expect([...icon.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+    expect(icon.readUInt32BE(16)).toBe(32)
+    expect(icon.readUInt32BE(20)).toBe(32)
+    expect(nightly.plugins['deep-link'].desktop.schemes).toEqual(['dsh-nightly'])
+    expect(config.plugins['deep-link'].desktop.schemes).toEqual(['dsh'])
+    expect(config.bundle.windows.wix.upgradeCode).toBe('d6340322-9fd6-54cd-a64f-28a2ade67a65')
+    expect(nightly.bundle.windows.wix.upgradeCode).toBe('11f927a0-72f4-5b2c-b24a-6b1c0fb6602f')
+    expect(nightly.bundle.windows.wix.fragmentPaths).toEqual(['./windows/fragments/autostart-cleanup-nightly.wxs'])
+  })
+
   it('writes a plain IconUri because the verbatim form is ignored by the toast platform', () => {
     const source = readFileSync(
       new URL('vendor/tauri-plugin-notifications/src/windows.rs', tauriRoot),

@@ -19,12 +19,13 @@ const RUN_REGISTRY_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Ru
 const STARTUP_APPROVED_REGISTRY_KEY: &str =
     "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
 
-/// 返回系统启动项名称；开发版独立命名，避免覆盖正式版的可执行文件路径。
-pub fn app_name() -> &'static str {
-    if cfg!(debug_assertions) {
-        "Deepseek Harness Desktop Dev"
-    } else {
-        "Deepseek Harness Desktop"
+/// 稳定版保留旧启动项名称，避免改名后丢失已启用状态；夜间版和开发态独立注册。
+pub fn app_name(identifier: &str) -> &'static str {
+    match (identifier, cfg!(debug_assertions)) {
+        ("dsh-tauri-nightly", true) => "DSH Tauri Nightly Dev",
+        ("dsh-tauri-nightly", false) => "DSH Tauri Nightly",
+        (_, true) => "Deepseek Harness Desktop Dev",
+        (_, false) => "Deepseek Harness Desktop",
     }
 }
 
@@ -70,7 +71,7 @@ fn remove_windows_startup_approval(name: &str) -> Result<(), String> {
 /// 从系统读取当前登录启动状态，允许用户在系统设置中直接修改它。
 pub fn is_enabled<R: Runtime>(app_handle: &AppHandle<R>) -> Result<bool, String> {
     #[cfg(windows)]
-    if !windows_run_entry_exists(app_name())? {
+    if !windows_run_entry_exists(app_name(&app_handle.config().identifier))? {
         return Ok(false);
     }
 
@@ -92,12 +93,12 @@ pub fn set_enabled<R: Runtime>(app_handle: &AppHandle<R>, enabled: bool) -> Resu
     } else {
         #[cfg(windows)]
         {
-            if windows_run_entry_exists(app_name())? {
+            if windows_run_entry_exists(app_name(&app_handle.config().identifier))? {
                 manager
                     .disable()
                     .map_err(|error| format!("AUTOSTART_DISABLE_FAILED: {error}"))?;
             }
-            remove_windows_startup_approval(app_name())?;
+            remove_windows_startup_approval(app_name(&app_handle.config().identifier))?;
         }
         #[cfg(not(windows))]
         manager
@@ -243,6 +244,25 @@ mod tests {
             "test autostart entry should be disabled"
         );
         clear_test_entry(&cleanup.manager).expect("repeated disable should be idempotent");
+    }
+
+    #[test]
+    fn stable_autostart_name_preserves_existing_registration() {
+        #[cfg(debug_assertions)]
+        assert_eq!(super::app_name("dsh-tauri"), "Deepseek Harness Desktop Dev");
+        #[cfg(not(debug_assertions))]
+        assert_eq!(super::app_name("dsh-tauri"), "Deepseek Harness Desktop");
+    }
+
+    #[test]
+    fn nightly_autostart_name_has_separate_registration() {
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            super::app_name("dsh-tauri-nightly"),
+            "DSH Tauri Nightly Dev"
+        );
+        #[cfg(not(debug_assertions))]
+        assert_eq!(super::app_name("dsh-tauri-nightly"), "DSH Tauri Nightly");
     }
 
     #[cfg(windows)]
