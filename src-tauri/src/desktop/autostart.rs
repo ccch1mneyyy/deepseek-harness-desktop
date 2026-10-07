@@ -29,6 +29,26 @@ pub fn app_name(identifier: &str) -> &'static str {
     }
 }
 
+/// macOS 应用改名会移动可执行文件，启动时仅刷新原已启用的登录启动项。
+pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    app.plugin(
+        tauri_plugin_autostart::Builder::new()
+            .app_name(app_name(&app.config().identifier))
+            .build(),
+    )?;
+    #[cfg(target_os = "macos")]
+    if let Err(error) = is_enabled(app).and_then(|enabled| {
+        if enabled {
+            set_enabled(app, true)
+        } else {
+            Ok(false)
+        }
+    }) {
+        log::warn!("[autostart] failed to refresh enabled login item: {error}");
+    }
+    Ok(())
+}
+
 #[cfg(windows)]
 fn windows_run_entry_exists(name: &str) -> Result<bool, String> {
     let current_user = RegKey::predef(HKEY_CURRENT_USER);
@@ -318,6 +338,88 @@ mod tests {
             startup_approved.get_raw_value(TEST_APP_NAME).is_err(),
             "StartupApproved value should be removed after disabling"
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_init_refreshes_only_enabled_login_items() {
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+
+        const CHILD_HOME: &str = "DSH_TEST_AUTOSTART_HOME";
+        let Some(home) = std::env::var_os(CHILD_HOME).map(PathBuf::from) else {
+            let home = tempfile::tempdir().unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "desktop::autostart::tests::macos_init_refreshes_only_enabled_login_items",
+                    "--nocapture",
+                ])
+                .env(CHILD_HOME, home.path())
+                .env("HOME", home.path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "isolated autostart init failed: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("AUTOSTART_INIT_VERIFIED"));
+            return;
+        };
+        assert_eq!(
+            std::env::var_os("HOME"),
+            Some(home.clone().into_os_string())
+        );
+        std::fs::create_dir_all(home.join("Library")).unwrap();
+        let name = if cfg!(debug_assertions) {
+            "Deepseek Harness Desktop Dev"
+        } else {
+            "Deepseek Harness Desktop"
+        };
+        let plist = home
+            .join("Library/LaunchAgents")
+            .join(format!("{name}.plist"));
+        let old_executable = home.join(
+            "Applications/Deepseek Harness Desktop.app/Contents/MacOS/deepseek-harness-desktop",
+        );
+        std::fs::create_dir_all(old_executable.parent().unwrap()).unwrap();
+        std::fs::write(&old_executable, b"").unwrap();
+        let previous = AutoLaunchBuilder::new()
+            .set_app_name(name)
+            .set_app_path(old_executable.to_string_lossy().as_ref())
+            .set_use_launch_agent(true)
+            .build()
+            .unwrap();
+        let executable = std::env::current_exe().unwrap().canonicalize().unwrap();
+
+        for enabled in [false, true] {
+            if enabled {
+                previous.enable().unwrap();
+                let content = std::fs::read_to_string(&plist).unwrap();
+                assert!(content.contains(&format!("<string>{}</string>", old_executable.display())));
+            }
+            let mut context = mock_context(noop_assets());
+            context.config_mut().identifier = "dsh-tauri".into();
+            context.config_mut().product_name = Some("DSH Tauri".into());
+            let app = mock_builder().build(context).unwrap();
+            super::init(app.handle()).unwrap();
+            assert_eq!(super::is_enabled(app.handle()).unwrap(), enabled);
+            if enabled {
+                let content = std::fs::read_to_string(&plist).unwrap();
+                assert!(
+                    content.contains(&format!("<string>{}</string>", executable.display())),
+                    "enabled login item must target the current executable"
+                );
+                assert!(!content.contains(old_executable.to_string_lossy().as_ref()));
+            } else {
+                assert!(
+                    !plist.exists(),
+                    "init must not enable a disabled login item"
+                );
+            }
+        }
+        println!("AUTOSTART_INIT_VERIFIED");
     }
 
     #[cfg(target_os = "macos")]

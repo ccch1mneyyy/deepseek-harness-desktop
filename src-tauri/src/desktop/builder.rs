@@ -1669,13 +1669,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         .manage(crate::desktop::pet_mouse::PetMouseStreamState::default())
         .setup(|app| {
             let app_handle = app.handle().clone();
-            app_handle.plugin(
-                tauri_plugin_autostart::Builder::new()
-                    .app_name(crate::desktop::autostart::app_name(
-                        &app.config().identifier,
-                    ))
-                    .build(),
-            )?;
+            crate::desktop::autostart::init(&app_handle)?;
             // 首装检测必须最先执行：窗口几何恢复/退出保存等任何 store 写入都会
             // 创建 store 文件，判定晚于它们会把首装误判为升级（见
             // config::detect_first_install 的时序说明）。

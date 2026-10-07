@@ -55,6 +55,33 @@ it('stable MSI removes only the three old renamed shortcuts on a major upgrade',
   expect(stableConfig.bundle.windows.wix.componentRefs).toEqual(['CleanupLegacyShortcuts'])
 })
 
+describe('nsis upgrade discovery', () => {
+  const source = readFileSync(new NodeURL('templates/installer.nsi', tauriRoot), 'utf8')
+
+  it('reads the old github install directory only for stable when the current key is empty', () => {
+    const read = source.match(/^Function ReadPreviousInstallLocation\r?\n([\s\S]*?)^FunctionEnd/m)?.[1]
+    expect(read).toMatch(/ReadRegStr \$4 SHCTX "\$\{MANUPRODUCTKEY\}" ""\s+!if "\$\{BUNDLEID\}" == "dsh-tauri"\s+\$\{If\} \$4 == ""\s+ReadRegStr \$4 SHCTX "Software\\github\\\$\{REGISTRYPRODUCTNAME\}" ""\s+\$\{EndIf\}\s+!endif/)
+    expect(read?.trim().endsWith('ClearErrors')).toBe(true)
+    expect(read).not.toContain('$INSTDIR')
+  })
+
+  it('uses the same lookup for restoring a path and passing the old directory to the uninstaller', () => {
+    const restore = source.match(/^Function RestorePreviousInstallLocation\r?\n([\s\S]*?)^FunctionEnd/m)?.[1]
+    expect(restore).toMatch(/Call ReadPreviousInstallLocation\s+StrCmp \$4 "" \+2 0\s+StrCpy \$INSTDIR \$4/)
+    const uninstall = source.slice(source.indexOf('reinst_uninstall:'), source.indexOf('reinst_done:'))
+    expect(uninstall).toMatch(/Call ReadPreviousInstallLocation\s+ReadRegStr \$R1 SHCTX "\$\{UNINSTKEY\}" "UninstallString"/)
+    expect(uninstall).toContain('StrCpy $R1 "$R1 _?=$4"')
+    expect(uninstall).not.toContain('Call RestorePreviousInstallLocation')
+  })
+
+  it('recognizes the legacy github MSI publisher only in stable without losing current publisher matches', () => {
+    const probe = source.slice(source.indexOf('wix_loop:'), source.indexOf('wix_found:'))
+    expect(probe).toMatch(/StrCmp "\$R0\$R1" "\$\{PRODUCTNAME\}\$\{MANUFACTURER\}" wix_found/)
+    expect(probe).toMatch(/StrCmp "\$R0\$R1" "\$\{REGISTRYPRODUCTNAME\}\$\{MANUFACTURER\}" wix_found/)
+    expect(probe).toMatch(/!if "\$\{BUNDLEID\}" == "dsh-tauri"\s+StrCmp "\$R0\$R1" "\$\{REGISTRYPRODUCTNAME\}github" wix_found\s+!endif\s+Goto wix_loop/)
+  })
+})
+
 describe('msi channel cleanup isolation', () => {
   it('stable MSI keeps existing autostart targets during a major upgrade', () => {
     expect(stable.querySelector('DirectoryRef[Id="TARGETDIR"] > Directory[Id="SystemFolder"]')).not.toBeNull()

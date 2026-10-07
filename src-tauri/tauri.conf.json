@@ -50,6 +50,12 @@
       "infoPlist": "Info.plist",
       "entitlements": "Entitlements.plist"
     },
+    "linux": {
+      "deb": {
+        "conflicts": ["deepseek-harness-desktop"],
+        "replaces": ["deepseek-harness-desktop"]
+      }
+    },
     "windows": {
       "nsis": {
         "template": "templates/installer.nsi",

@@ -26,6 +26,12 @@
       "icons/nightly/icon.png"
     ],
     "resources": ["resources/**/*", "icons/nightly/32x32.png"],
+    "linux": {
+      "deb": {
+        "conflicts": [],
+        "replaces": []
+      }
+    },
     "windows": {
       "nsis": {
         "installerIcon": "icons/nightly/icon.ico",

@@ -133,6 +133,19 @@ describe('nightly release assets', () => {
     }
   })
 
+  it('unsigned builds exercise nightly identity and asset naming without publishing a release', () => {
+    const source = readSource('.github/workflows/build-test.yml')
+    expect(source).toMatch(/nightly:\n\s+description: [^\n]+\n\s+required: false\n\s+default: false\n\s+type: boolean/)
+    expect(source.match(/node scripts\/stamp-version\.mjs 0\.0\.0-nightly\.test/g)).toHaveLength(3)
+    expect(source.match(/inputs\.nightly && '--config src-tauri\/tauri\.nightly\.conf\.json' \|\| ''/g)).toHaveLength(3)
+    expect(source.match(/node scripts\/rename-release-assets\.mjs/g)).toHaveLength(3)
+    expect(source).toContain('pnpm tauri build --bundles appimage,deb')
+    expect(source.indexOf('- name: Stamp nightly version', source.indexOf('  windows:')))
+      .toBeLessThan(source.indexOf('- name: Prepare MSI version override'))
+    expect(source).toContain('contents: read')
+    expect(source).not.toMatch(/gh release|contents: write/)
+  })
+
   it('prunes stale assets only after both uploads succeed', () => {
     const source = readSource(WORKFLOW)
     const cleanup = stepBody(source, PRUNE_STEP)

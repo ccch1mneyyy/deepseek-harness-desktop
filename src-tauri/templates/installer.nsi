@@ -220,7 +220,11 @@ Function PageReinstall
     ReadRegStr $R0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
     ReadRegStr $R1 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$1" "Publisher"
     StrCmp "$R0$R1" "${PRODUCTNAME}${MANUFACTURER}" wix_found
-    StrCmp "$R0$R1" "${REGISTRYPRODUCTNAME}${MANUFACTURER}" 0 wix_loop
+    StrCmp "$R0$R1" "${REGISTRYPRODUCTNAME}${MANUFACTURER}" wix_found
+    !if "${BUNDLEID}" == "dsh-tauri"
+      StrCmp "$R0$R1" "${REGISTRYPRODUCTNAME}github" wix_found
+    !endif
+    Goto wix_loop
     wix_found:
     ReadRegStr $R0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$1" "UninstallString"
     ${StrCase} $R1 $R0 "L"
@@ -381,7 +385,7 @@ Function PageLeaveReinstall
       ReadRegStr $R1 HKLM "$R6" "UninstallString"
       ExecWait '$R1' $0
     ${Else}
-      ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
+      Call ReadPreviousInstallLocation
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
       ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
@@ -1054,8 +1058,19 @@ Section Uninstall
   ${EndIf}
 SectionEnd
 
-Function RestorePreviousInstallLocation
+Function ReadPreviousInstallLocation
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
+  !if "${BUNDLEID}" == "dsh-tauri"
+    ${If} $4 == ""
+      ReadRegStr $4 SHCTX "Software\github\${REGISTRYPRODUCTNAME}" ""
+    ${EndIf}
+  !endif
+  ; 安装记录缺失是正常分支，不能让错误标志把成功卸载误判为失败。
+  ClearErrors
+FunctionEnd
+
+Function RestorePreviousInstallLocation
+  Call ReadPreviousInstallLocation
   StrCmp $4 "" +2 0
     StrCpy $INSTDIR $4
 FunctionEnd
