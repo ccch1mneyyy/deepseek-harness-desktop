@@ -82,9 +82,14 @@ export function McpTab({ t }: McpTabProps): ReactElement {
     try {
       const body = await postImportApply({ items })
       const failed = body.results.filter(item => !item.ok)
-      setToast(failed.length === 0
-        ? { text: t(body.restartNeeded ? 'restartNeeded' : 'mcpApplied'), ok: true, seq: Date.now() }
-        : { text: `${t('failed')}: ${failed.map(item => `${item.name} (${item.error})`).join(', ')}`, ok: false, seq: Date.now() })
+      if (failed.length === 0) {
+        setToast({ text: t(body.restartNeeded ? 'restartNeeded' : 'mcpApplied'), ok: true, seq: Date.now() })
+      }
+      else {
+        const detail = failed.map(item => `${item.name} (${item.error})`).join(', ')
+        const restart = body.restartNeeded && body.results.some(item => item.ok) ? ` ${t('restartNeeded')}` : ''
+        setToast({ text: `${t('failed')}: ${detail}${restart}`, ok: false, seq: Date.now() })
+      }
       setImportOpen(false)
       setReload(value => value + 1)
     }
