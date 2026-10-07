@@ -261,6 +261,16 @@
             "dsh": "^0.2.0-rc.1"
           }
         ]
+      },
+      {
+        "id": "@dsh-external/dsh-chat-content-visibility-auto",
+        "spec": "github:hongweifei/dsh-chat-content-visibility-auto",
+        "name": "DSH Chat Content Visibility",
+        "description": "聊天列表渲染优化：为会话消息节点启用浏览器原生 content-visibility: auto，自动跳过屏外节点的布局与绘制，长会话滚动与输入更顺滑；纯样式叠加，不改 DOM 结构、零产品逻辑。 · Pure-CSS chat list render optimization: enables the native content-visibility: auto so off-screen messages skip layout and paint. No DOM or product-logic changes.",
+        "repo": "https://github.com/hongweifei/dsh-chat-content-visibility-auto",
+        "recommended": true,
+        "checked": true,
+        "version": "latest"
       }
     ]
   },

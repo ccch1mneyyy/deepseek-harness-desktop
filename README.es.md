@@ -81,6 +81,7 @@ El asistente ofrece los siguientes plugins comunitarios para instalar a demanda.
 - [DSH Rewind](https://github.com/SiriLee/dsh-rewind) — Retroceso de conversación y backups del workspace
 - [DSH Bridge](https://github.com/wenbin-wb/dsh-bridge) — Acceso remoto, túneles y conexión de bots
 - [DSH IM](https://github.com/xmanrui/dsh-im) — Canales IM y gestión de bots
+- [DSH Chat Content Visibility](https://github.com/hongweifei/dsh-chat-content-visibility-auto) — Optimización de render de la lista de chat en sesiones largas (content-visibility)
 
 Pedí preajustes nuevos o actualizados mediante [Issues](https://github.com/dsh-tauri/deepseek-harness-desktop/issues). Las versiones disponibles siguen las reglas de compatibilidad del manifiesto.
 

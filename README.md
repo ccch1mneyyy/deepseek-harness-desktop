@@ -79,6 +79,7 @@
 - [DSH Rewind](https://github.com/SiriLee/dsh-rewind) — 对话回退与工作区备份
 - [DSH Bridge](https://github.com/wenbin-wb/dsh-bridge) — 远程访问、隧道与机器人接入
 - [DSH IM](https://github.com/xmanrui/dsh-im) — IM 渠道与机器人管理
+- [DSH Chat Content Visibility](https://github.com/hongweifei/dsh-chat-content-visibility-auto) — 长会话聊天列表渲染优化（content-visibility）
 
 新增或更新预设请提交 [Issue](https://github.com/dsh-tauri/deepseek-harness-desktop/issues)；可用版本由清单中的内核兼容规则决定。
 

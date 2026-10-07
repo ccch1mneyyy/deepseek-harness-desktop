@@ -81,6 +81,7 @@ Setup offers the following community plugins for installation on demand.
 - [DSH Rewind](https://github.com/SiriLee/dsh-rewind) — Conversation rewind and workspace backups
 - [DSH Bridge](https://github.com/wenbin-wb/dsh-bridge) — Remote access, tunnels, and bot connections
 - [DSH IM](https://github.com/xmanrui/dsh-im) — IM channels and bot management
+- [DSH Chat Content Visibility](https://github.com/hongweifei/dsh-chat-content-visibility-auto) — Chat list render optimization for long sessions (content-visibility)
 
 Request new or updated presets via [Issues](https://github.com/dsh-tauri/deepseek-harness-desktop/issues). Available versions follow the manifest's core compatibility rules.
 

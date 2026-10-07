@@ -624,8 +624,36 @@ mod tests {
     fn preset_manifest_specs_match_ids() {
         let presets = load_presets_for_test();
         for preset in &presets {
+            // git 形态的 spec 自带来源，不与包名同形；此时 id 仍是安装与已安装检测的键
+            if preset.spec.starts_with("github:") || preset.spec.starts_with("git+") {
+                let repo = preset.spec.split('#').next().unwrap_or_default();
+                assert_eq!(
+                    repo.split('/').count(),
+                    2,
+                    "{} 的 git spec 必须是 owner/repo 形态：{}",
+                    preset.id,
+                    preset.spec
+                );
+                continue;
+            }
             assert_eq!(preset.spec, preset.id);
         }
+    }
+
+    #[test]
+    fn preset_chat_content_visibility_ships_from_github() {
+        let presets = load_presets_for_test();
+        let preset = presets
+            .iter()
+            .find(|p| p.id == "@dsh-external/dsh-chat-content-visibility-auto")
+            .expect("chat content visibility preset should be shipped");
+        assert_eq!(preset.spec, "github:hongweifei/dsh-chat-content-visibility-auto");
+        assert_eq!(
+            preset.repo_url,
+            "https://github.com/hongweifei/dsh-chat-content-visibility-auto"
+        );
+        assert!(preset.recommended, "预设应标记为推荐");
+        assert!(!preset.default_unchecked, "预设应在首次引导中默认勾选");
     }
 
     /// 核心驱动的退役判定：核心命中某代区间 → 已装版本不属于该代才退役（旧版插件在
