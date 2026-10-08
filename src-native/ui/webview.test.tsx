@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => ({
   appState: { currentState: 'active' },
+  platform: { OS: 'android' },
   appListeners: new Set<() => void>(),
   backListeners: new Set<() => boolean>(),
   navigation: { isFocused: vi.fn<() => boolean>() },
@@ -26,7 +27,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Modal: 'Modal',
   Pressable: 'Pressable',
-  Platform: { OS: 'android' },
+  Platform: native.platform,
   Linking: { openURL: native.openURL },
   AppState: {
     get currentState() { return native.appState.currentState },
@@ -265,7 +266,7 @@ function createPage(selectSession?: (sessionId: string) => void, kind: 'app' | '
     expect(runInContext(script, context, { timeout: 1000 })).toBe(true)
   }
   run(webView().props.injectedJavaScriptBeforeContentLoaded)
-  return { posts, window, document, run }
+  return { posts, window, document, styles, run }
 }
 
 beforeEach(async () => {
@@ -281,6 +282,7 @@ beforeEach(async () => {
     originalError(...args)
   })
   native.appState.currentState = 'active'
+  native.platform.OS = 'android'
   native.appListeners.clear()
   native.backListeners.clear()
   native.navigation.isFocused.mockReturnValue(true)
@@ -318,6 +320,32 @@ afterEach(async () => {
 })
 
 describe('rendered Bridge WebView document lifecycle', () => {
+  it.each(['android', 'ios'])('declares only the safe-area edges already padded natively on %s', async (platform) => {
+    native.platform.OS = platform
+    await mount()
+    const edges = platform === 'ios' ? ['top'] : ['top', 'bottom']
+    expect(root().find(node => String(node.type) === 'SafeAreaView').props.edges).toEqual(edges)
+    const page = createPage()
+    const style = page.styles.get('dsh-bridge-tap-highlight')
+    expect(style?.textContent).toContain('--dsh-mobile-safe-area-inset-top: 0px;')
+    if (platform === 'android')
+      expect(style?.textContent).toContain('--dsh-mobile-safe-area-inset-bottom: 0px;')
+    else
+      expect(style?.textContent).not.toContain('--dsh-mobile-safe-area-inset-bottom')
+    expect(style?.textContent).not.toMatch(/--dsh-mobile-safe-area-inset-(left|right)/)
+    expect(style?.textContent).toContain('-webkit-tap-highlight-color: transparent;')
+    const receive = Reflect.get(page.window, '__dshBridgeReceive')
+    page.run(webView().props.injectedJavaScript)
+    await act(async () => {
+      webView().props.onLoad({ nativeEvent: { url: alpha.url } })
+    })
+    for (const [script] of (await viewRef()).injectJavaScript.mock.calls)
+      page.run(script)
+    expect(page.styles.size).toBe(1)
+    expect(page.styles.get('dsh-bridge-tap-highlight')).toBe(style)
+    expect(Reflect.get(page.window, '__dshBridgeReceive')).toBe(receive)
+  })
+
   it('never records Android native finish followed by network error as a successful connection', async () => {
     await mount()
     const view = await viewRef()
