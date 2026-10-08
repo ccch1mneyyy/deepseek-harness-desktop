@@ -21,7 +21,7 @@
   <a href="https://github.com/dsh-tauri/deepseek-harness-desktop/releases">
     <img src="https://img.shields.io/github/v/release/dsh-tauri/deepseek-harness-desktop?&label=Release&color=4D6BFE" alt="Release" />
   </a>
-  <img src="https://img.shields.io/badge/DSH-0.2.1--alpha.1%2B-4d6bfe" alt="DSH 0.2.1-alpha.1" />
+  <img src="https://img.shields.io/badge/DSH-0.2.0--rc.2%2B-4d6bfe" alt="DSH 0.2.0-rc.2" />
   <img src="https://img.shields.io/github/license/dsh-tauri/deepseek-harness-desktop" alt="MIT License" />
   <br>
   <img src="https://img.shields.io/github/downloads/dsh-tauri/deepseek-harness-desktop/total?&label=downloads&color=4D6BFE" alt="Downloads" />
@@ -122,7 +122,7 @@ Windows startup failures show a native dialog with the underlying error. For `ST
 
 | Current baseline | Version |
 | --- | --- |
-| Recommended Harness core | `0.2.1-alpha.1` |
+| Recommended Harness core | `0.2.0-rc.2` |
 | Declared minimum core | `0.1.5-rc.1`; not a compatibility guarantee for every plugin |
 
 - Core and preset selection follow the [resource manifest](<./src-tauri/resources/manifest.jsonc>) and declared plugin version ranges, not a promise of compatibility with arbitrary latest upstream releases.

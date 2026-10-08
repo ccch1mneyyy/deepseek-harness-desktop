@@ -20,7 +20,7 @@ Integration points:
 ## Compatibility `0.2.0-rc.2` → `0.2.1-alpha.1`
 
 - The target preserves semantic drafts as text plus reference identities. Worktree transfer and rollback now capture the resident input shell draft before clearing the source, restore the complete semantic document, and flush the mounted persistence action when present.
-- Structured input is detected by `SessionInputShell.draftSnapshot`; old kernels retain the plain-text action path. Attachments remain under their existing owner and retain the existing capture/recreate/upload checks.
+- Structured input is detected by `SessionInputShell.draftSnapshot`; when the composer exposes `persistDraft` but its semantic snapshot is unavailable, transfer stops before creating the target or clearing the source. Old kernels retain the plain-text action path. Attachments remain under their existing owner and retain the existing capture/recreate/upload checks.
 - Ordinary reference insertion is not used to replay saved references: its spans use detect coordinates and it may append a space, whereas saved draft spans use clipboard coordinates.
 
 ## License

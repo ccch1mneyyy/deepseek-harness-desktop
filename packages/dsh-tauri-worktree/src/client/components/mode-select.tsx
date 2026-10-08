@@ -16,10 +16,10 @@ import { useWaiter } from '../hooks/use-waiter'
 import { useWorktreeSession } from '../hooks/use-worktree-session'
 import { locale } from '../locales'
 import { awaitDraftUploads, captureDraftAttachments, mergeCapturedAttachments, recreateDraftAttachments, releaseDraftAttachments } from '../service/attachments'
-import { restoreSessionDraft, waitForInputActions, waitForSessionListed } from '../service/session-switch'
+import { waitForInputActions, waitForSessionListed } from '../service/session-switch'
 import { attach, create } from '../service/worktree'
 import { store } from '../store'
-import { addDraftAttachments, canAddDraftAttachments, draftAttachmentIds, hasSendableContent, interceptsSubmit, removeDraftAttachment, resolveAccessModeGroup, showsModeSelect } from './mode-select.utils'
+import { addDraftAttachments, canAddDraftAttachments, draftAttachmentIds, hasSendableContent, interceptsSubmit, removeDraftAttachment, resolveAccessModeGroup, restoreSessionDraft, showsModeSelect } from './mode-select.utils'
 
 export interface ModeSelectProps {
   sessionId: string
@@ -125,8 +125,12 @@ function WorktreeModeControl({ sessionId, useInput, inputActions, sessionsRuntim
     const start = async (): Promise<void> => {
       if (submittingRef.current || !sendable)
         return
-      submittingRef.current = true
       const currentDraft = resolveInput?.(sessionId)?.draftSnapshot
+      if (typeof inputActions.persistDraft === 'function' && currentDraft === undefined) {
+        store.worktree.patch(sessionId, { mode: 'local', phase: 'error', loadingLabel: '', error: '无法读取消息引用草稿，请重试' })
+        return
+      }
+      submittingRef.current = true
       const capturedDraft = currentDraft === undefined
         ? { text: draft, references: [] }
         : { text: currentDraft.text, references: currentDraft.references.map(reference => ({ ...reference })) }

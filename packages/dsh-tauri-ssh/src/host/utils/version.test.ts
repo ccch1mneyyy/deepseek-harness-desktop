@@ -50,12 +50,22 @@ describe('isPreviewTag', () => {
 })
 
 describe('pickReleaseTag', () => {
-  it('selects the verified alpha.1 package release with the default recommendation', () => {
+  it('keeps rc.2 recommended when a newer alpha.1 package release is listed', () => {
     const releases = [{ tag: 'dsh-0.2.1-alpha.1-37117505103', prerelease: false }, ...RELEASES]
     expect(pickReleaseTag(releases)).toEqual({
+      tag: 'dsh-0.2.0-rc.2-36556493178',
+      version: '0.2.0-rc.2',
+      source: 'recommended',
+      notes: [],
+    })
+  })
+
+  it('resolves an explicit alpha.1 version pin to the verified package release', () => {
+    const releases = [{ tag: 'dsh-0.2.1-alpha.1-37117505103', prerelease: false }, ...RELEASES]
+    expect(pickReleaseTag(releases, { ref: '0.2.1-alpha.1' })).toEqual({
       tag: 'dsh-0.2.1-alpha.1-37117505103',
       version: '0.2.1-alpha.1',
-      source: 'recommended',
+      source: 'pin',
       notes: [],
     })
   })

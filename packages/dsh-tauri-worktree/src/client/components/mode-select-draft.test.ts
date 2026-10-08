@@ -1,6 +1,6 @@
-import type { DraftReference, InputActions, SessionInputRuntime } from './session-switch.types'
+import type { DraftReference, InputActions, SessionInputRuntime } from '../service/session-switch.types'
 import { describe, expect, it, vi } from 'vitest'
-import { restoreSessionDraft } from './session-switch'
+import { restoreSessionDraft } from './mode-select.utils'
 
 const references: readonly DraftReference[] = [
   { source: 'files', ref: '/a.ts', offset: 4, length: 5, label: 'a.ts', appearance: 'file', clipboardText: '/a.ts' },

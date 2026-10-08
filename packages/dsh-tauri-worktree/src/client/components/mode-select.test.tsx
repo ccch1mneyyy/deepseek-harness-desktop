@@ -80,8 +80,26 @@ function transferSurface() {
       <WorktreeModeSelect {...props} />
     </section>,
   )
-  return { view, draft, sourceActions, targetActions, sourceInput, targetInput }
+  return { view, props, draft, sourceActions, targetActions, sourceInput, targetInput }
 }
+
+it('leaves the source draft intact when semantic capture is unavailable on a semantic-capable composer', async () => {
+  const { view, props, sourceActions, targetActions } = transferSurface()
+  props.resolveInput = () => undefined
+  view.rerender(
+    <section data-composer-seat>
+      <div data-slot="conversation.hero.agentPreset">preset</div>
+      <button type="button" aria-label="Send">send</button>
+      <WorktreeModeSelect {...props} />
+    </section>,
+  )
+  fireEvent.click(view.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(store.worktree.patch).toHaveBeenCalledWith('source', expect.objectContaining({ mode: 'local', phase: 'error', error: '无法读取消息引用草稿，请重试' })))
+  expect(create).not.toHaveBeenCalled()
+  expect(sourceActions.setDraft).not.toHaveBeenCalled()
+  expect(sourceActions.persistDraft).not.toHaveBeenCalled()
+  expect(targetActions.submit).not.toHaveBeenCalled()
+})
 
 it('transfers the captured semantic draft into the new worktree before submitting', async () => {
   const { view, draft, sourceActions, targetActions, targetInput } = transferSurface()
