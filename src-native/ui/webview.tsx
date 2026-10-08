@@ -34,6 +34,7 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
   const focusRequestRef = useRef<{ requestId: string, focus: NotificationFocus } | null>(null)
   const documentReadyRef = useRef(false)
   const [documentReady, setDocumentReady] = useState(false)
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false)
   const [documentGeneration, setDocumentGeneration] = useState(0)
   const state = useStore(connection)
   const navigation = useNavigation()
@@ -76,13 +77,13 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
         focusRequestRef.current = null
     }
   }, [address.id, appState, documentReady, nonce, state.loadError, state.pendingFocus, state.focusGeneration])
-  // keep:effect Bound a silent or non-DSH WebView load without mistaking Android's finish event for success.
+  // keep:effect Offer recovery for a slow document without rejecting its later authenticated readiness.
   useEffect(() => {
     if (documentReady || state.loadError)
       return
-    const timeout = setTimeout(() => connection.markLoadFailed(generation, t('connection.connectionFailed')), WEBVIEW_LOAD_TIMEOUT_MS)
+    const timeout = setTimeout(setLoadingTimedOut, WEBVIEW_LOAD_TIMEOUT_MS, true)
     return () => clearTimeout(timeout)
-  }, [documentGeneration, documentReady, generation, state.loadError, t])
+  }, [documentGeneration, documentReady, state.loadError])
   // keep:effect Route Android back to WebView history without consuming an open drawer's back event.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -124,6 +125,7 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
         return
       documentReadyRef.current = true
       setDocumentReady(true)
+      setLoadingTimedOut(false)
       connection.markLoaded(generation)
       return
     }
@@ -157,6 +159,7 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
     focusRequestRef.current = null
     documentReadyRef.current = false
     setDocumentReady(false)
+    setLoadingTimedOut(false)
     setDocumentGeneration(value => value + 1)
   }
   function loaded(url: string) {
@@ -218,7 +221,7 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
             </Pressable>
           </Then>
         </If>
-        <If cond={state.loading}>
+        <If cond={state.loading && !loadingTimedOut}>
           <Then>
             <View className="absolute inset-0 items-center justify-center gap-5 bg-background">
               <BreathingLight />
@@ -226,10 +229,10 @@ export function BridgeWebView({ address, generation }: { address: BridgeAddress,
             </View>
           </Then>
         </If>
-        <If cond={state.loadError}>
+        <If cond={state.loadError || (loadingTimedOut && !documentReady)}>
           <Then>
             <View className="absolute inset-0 items-center justify-center gap-5 bg-background px-8">
-              <Text className="text-center text-base leading-7 text-foreground">{state.loadError}</Text>
+              <Text className="text-center text-base leading-7 text-foreground" accessibilityLiveRegion="polite">{state.loadError ?? t('connection.loadingSlow')}</Text>
               <Button onPress={() => connectAddress(address)}>{t('connection.reconnect')}</Button>
               <Button variant="ghost" onPress={openDrawer}>{t('connection.connectionInfo')}</Button>
             </View>

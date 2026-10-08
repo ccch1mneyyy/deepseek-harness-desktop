@@ -4,6 +4,7 @@
   "connection.scanning": "扫描局域网端口中...",
   "connection.checkingHistory": "寻找可用连接",
   "connection.loading": "寻找可用连接",
+  "connection.loadingSlow": "页面加载较慢，仍在等待响应。可以继续等待或重新连接。",
   "connection.autoScan": "自动扫描局域网",
   "connection.recentConnections": "最近连接",
   "connection.refreshConnections": "刷新最近连接",

@@ -108,6 +108,7 @@ const beta = { id: 'https://second.test', url: 'https://second.test/workspaces',
 const focus: NotificationFocus = { origin: 'http://bridge.test:3080', sessionId: 'session-alpha', title: 'Answer complete', tag: 'tag-alpha' }
 const nonce = 'webview-uuid-1'
 const failure = '连接失败，请检查主机地址、网络或访问令牌。'
+const slowLoading = '页面加载较慢，仍在等待响应。可以继续等待或重新连接。'
 const focusFailure = '已恢复连接，但未能定位通知对应会话，请在网页中手动选择。'
 let screen: ReactTestRenderer | undefined
 let store: typeof import('@/store/modules/connection')
@@ -455,13 +456,15 @@ describe('rendered Bridge WebView document lifecycle', () => {
       await vi.advanceTimersByTimeAsync(20000)
     })
 
-    expect(connection.loading).toBe(false)
-    expect(connection.loadError).toBe(failure)
+    expect(connection.loading).toBe(true)
+    expect(connection.loadError).toBeNull()
     expect(connection.history).toEqual([])
-    expect(texts()).toContain(failure)
+    expect(texts()).toContain(slowLoading)
+    expect(texts()).not.toContain(failure)
+    expect(native.getPermissionsAsync).not.toHaveBeenCalled()
   })
 
-  it('times out a later unverified HTTP 401 document without erasing earlier successful history', async () => {
+  it('offers recovery for a later unverified HTTP 401 document without erasing earlier successful history', async () => {
     await mount()
     await ready()
     await act(async () => {
@@ -481,9 +484,11 @@ describe('rendered Bridge WebView document lifecycle', () => {
       await vi.advanceTimersByTimeAsync(1)
     })
 
-    expect(connection.loadError).toBe(failure)
+    expect(connection.loading).toBe(false)
+    expect(connection.loadError).toBeNull()
     expect(connection.history).toEqual([{ ...alpha, lastConnectedAt: 1767225600000 }])
-    expect(texts()).toContain(failure)
+    expect(texts()).toContain(slowLoading)
+    expect(texts()).not.toContain(failure)
     expect(native.getPermissionsAsync).toHaveBeenCalledTimes(1)
   })
 
@@ -560,9 +565,34 @@ describe('rendered Bridge WebView document lifecycle', () => {
       await vi.advanceTimersByTimeAsync(1)
     })
 
-    expect(connection.loadError).toBe(failure)
+    expect(connection.loadError).toBeNull()
+    expect(connection.loading).toBe(true)
     expect(connection.history).toEqual([])
-    expect(texts()).toContain(failure)
+    expect(texts()).toContain(slowLoading)
+    expect(texts()).not.toContain(failure)
+  })
+
+  it('restarts the slow-page prompt when a new trusted document replaces a timed-out document', async () => {
+    await mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000)
+    })
+    expect(texts()).toContain(slowLoading)
+    await act(async () => {
+      webView().props.onLoadStart({ nativeEvent: { url: 'http://bridge.test:3080/login', loading: true } })
+    })
+    expect(texts()).not.toContain(slowLoading)
+    expect(texts()).toContain('寻找可用连接')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(19999)
+    })
+    expect(texts()).not.toContain(slowLoading)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(texts()).toContain(slowLoading)
+    expect(connection.loadError).toBeNull()
+    expect(connection.history).toEqual([])
   })
 
   it('accepts the verified replacement document after the previous document deadline has elapsed', async () => {
@@ -615,7 +645,7 @@ describe('rendered Bridge WebView document lifecycle', () => {
     expect(connection.pendingFocus).toBeNull()
   })
 
-  it('replaces a native-finished but unauthenticated document with a visible failure at exactly twenty seconds', async () => {
+  it('offers recovery for a native-finished but unauthenticated document at exactly twenty seconds', async () => {
     await mount()
     await act(async () => {
       webView().props.onLoad({ nativeEvent: { url: alpha.url } })
@@ -628,12 +658,59 @@ describe('rendered Bridge WebView document lifecycle', () => {
       await vi.advanceTimersByTimeAsync(1)
     })
 
-    expect(connection.loading).toBe(false)
-    expect(connection.loadError).toBe(failure)
+    expect(connection.loading).toBe(true)
+    expect(connection.loadError).toBeNull()
     expect(connection.history).toEqual([])
-    expect(texts()).toContain(failure)
+    expect(texts()).toContain(slowLoading)
+    expect(texts()).not.toContain(failure)
     expect(root().findAll(node => node.props.accessibilityRole === 'progressbar')).toHaveLength(0)
     expect(root().findAll(node => String(node.type) === 'Button').map(text)).toContain('重新连接')
+    expect(native.getPermissionsAsync).not.toHaveBeenCalled()
+  })
+
+  it.each(['app', 'login'] as const)('accepts a verified %s document that becomes ready after the twenty-second deadline', async (kind) => {
+    await mount()
+    const view = await viewRef()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(35000)
+    })
+    expect(texts()).toContain(slowLoading)
+    expect(connection.history).toEqual([])
+    expect(native.getPermissionsAsync).not.toHaveBeenCalled()
+    for (const options of [{ url: 'https://foreign.test/' }, { nonce: 'stale-nonce' }])
+      await message({ type: 'dsh://bridge-ready' }, options)
+    expect(texts()).toContain(slowLoading)
+    expect(connection.history).toEqual([])
+    const page = createPage(undefined, kind)
+    await rawMessage(page.posts[0]!)
+
+    expect(connection.loadError).toBeNull()
+    expect(connection.loading).toBe(false)
+    expect(connection.history).toEqual([{ ...alpha, lastConnectedAt: 1767225635000 }])
+    expect(connection.health[alpha.id]).toBe('available')
+    expect(texts()).not.toContain(failure)
+    expect(texts()).not.toContain(slowLoading)
+    expect(native.getPermissionsAsync).toHaveBeenCalledTimes(1)
+    expect(await viewRef()).toBe(view)
+    await ready()
+    expect(connection.history).toEqual([{ ...alpha, lastConnectedAt: 1767225635000 }])
+  })
+
+  it.each(['onError', 'onHttpError', 'onRenderProcessGone', 'onContentProcessDidTerminate'])('rejects late authenticated readiness when native %s reports a real error after the deadline', async (callback) => {
+    await mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20001)
+      webView().props[callback]({ nativeEvent: { url: alpha.url, code: -6, statusCode: 500, didCrash: true } })
+    })
+    const page = createPage()
+    await rawMessage(page.posts[0]!)
+
+    expect(connection.loadError).toBe(failure)
+    expect(connection.loading).toBe(false)
+    expect(connection.history).toEqual([])
+    expect(connection.health[alpha.id]).toBe('unavailable')
+    expect(texts()).toContain(failure)
+    expect(texts()).not.toContain(slowLoading)
     expect(native.getPermissionsAsync).not.toHaveBeenCalled()
   })
 
