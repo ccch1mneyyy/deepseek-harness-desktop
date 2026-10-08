@@ -27,6 +27,7 @@ on:
       - pnpm-workspace.yaml
       - .github/workflows/build-android.yml
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -163,6 +164,15 @@ jobs:
           head -n 5 "$RUNNER_TEMP/badging.txt"
           grep -q "versionName='${VERSION}'" "$RUNNER_TEMP/badging.txt" \
             || { echo "::error::APK versionName 与 app.json expo.version ${VERSION} 不一致"; exit 1; }
+          if grep -q '^application-debuggable' "$RUNNER_TEMP/badging.txt"; then
+            echo '::error::测试 APK 不得启用开发模式或依赖 Metro。'
+            exit 1
+          fi
+          if ! unzip -p "$destination" assets/index.android.bundle > "$RUNNER_TEMP/index.android.bundle" || [[ ! -s "$RUNNER_TEMP/index.android.bundle" ]]; then
+            echo '::error::APK 必须内置非空 JavaScript bundle，才能脱离 Metro 运行。'
+            exit 1
+          fi
+          echo 'APK embeds a non-empty JavaScript bundle and is not debuggable.'
           APK_PATH="$destination" node --input-type=commonjs -e '
             const fs = require("node:fs");
             const { execFileSync } = require("node:child_process");
