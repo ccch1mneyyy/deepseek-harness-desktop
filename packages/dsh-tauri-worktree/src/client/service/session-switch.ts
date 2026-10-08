@@ -1,5 +1,17 @@
-import type { InputActions, InputSessions, ListSessions, SwitchOutcome, SwitchSessions, Wait } from './session-switch.types'
+import type { InputActions, InputSessions, ListSessions, SessionDraft, SessionInputRuntime, SwitchOutcome, SwitchSessions, Wait } from './session-switch.types'
 import { SESSION_SWITCH_MAX_ATTEMPTS, SESSION_SWITCH_RETRY_DELAY_MS } from '../constants'
+
+export function restoreSessionDraft(actions: InputActions, draft: SessionDraft, input?: SessionInputRuntime): void {
+  if (draft.references.length > 0) {
+    if (input?.draftSnapshot === undefined)
+      throw new Error('无法迁移消息引用到工作树会话')
+    input.setDraft(draft)
+  }
+  else {
+    actions.setDraft(draft.text)
+  }
+  actions.persistDraft?.()
+}
 
 interface ListWaitInput {
   sessions: ListSessions
