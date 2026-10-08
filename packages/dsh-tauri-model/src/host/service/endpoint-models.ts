@@ -5,8 +5,10 @@ import {
   apiKeyRefOf,
   endpointOf,
   getPath,
+  listingHeaders,
   modelsListingUrl,
   normalizeEndpointModels,
+  parseHeaders,
   parseProfilePath,
 } from './endpoint-models.utils'
 
@@ -15,6 +17,7 @@ export interface EndpointModelsInput {
   profilePath?: string
   baseURL?: string
   apiKey?: string
+  headers?: string
 }
 
 export type EndpointModelsResult
@@ -74,13 +77,11 @@ export const endpointModels = defineService({
     }
     const url = modelsListingUrl(baseURL)
     const apiKey = await resolveApiKey(apiKeyRefOf(profile), input.apiKey)
+    const headers = listingHeaders(apiKey, parseHeaders(input.headers))
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          accept: 'application/json',
-          ...apiKey === undefined ? {} : { authorization: `Bearer ${apiKey}` },
-        },
+        headers,
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })
       if (!response.ok) {

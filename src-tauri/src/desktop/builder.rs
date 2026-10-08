@@ -228,7 +228,7 @@ pub fn tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
         .icon_as_template(true)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Deepseek Harness Desktop")
+        .tooltip(crate::desktop::product_name(app))
         .on_menu_event(move |app, event| handle_menu_event(app, &event))
         .on_tray_icon_event(move |tray, event| handle_tray_icon_event(tray, &event))
         .build(app)?;
@@ -238,7 +238,7 @@ pub fn tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
         .icon(icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Deepseek Harness Desktop")
+        .tooltip(crate::desktop::product_name(app))
         .on_menu_event(move |app, event| handle_menu_event(app, &event))
         .on_tray_icon_event(move |tray, event| handle_tray_icon_event(tray, &event))
         .build(app)?;
@@ -381,11 +381,7 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
     let services =
         PredefinedMenuItem::services(app, Some(&crate::config::i18n::t("menu.services")))?;
     let services_separator = PredefinedMenuItem::separator(app)?;
-    let app_name = app
-        .config()
-        .product_name
-        .as_deref()
-        .unwrap_or(&app.package_info().name);
+    let app_name = crate::desktop::product_name(app);
     let hide_label = format!("{} {}", crate::config::i18n::t("menu.hide"), app_name);
     let hide = PredefinedMenuItem::hide(app, Some(&hide_label))?;
     let hide_others =
@@ -398,7 +394,7 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
     let system_application_menu = Submenu::with_id_and_items(
         app,
         "desktop-system-application-menu",
-        app.package_info().name.clone(),
+        app_name,
         true,
         &[
             &about,
@@ -420,6 +416,13 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
         app,
         "desktop-copy-run-logs",
         crate::config::i18n::t("menu.run_logs"),
+        true,
+        None::<&str>,
+    )?;
+    let toggle_devtools = MenuItem::with_id(
+        app,
+        "desktop-toggle-devtools",
+        crate::config::i18n::t("menu.toggle_devtools"),
         true,
         None::<&str>,
     )?;
@@ -473,6 +476,7 @@ pub fn install_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<()> {
             &harness_feedback,
             &feedback_separator,
             &run_logs,
+            &toggle_devtools,
             &task_manager,
         ],
     )?;
@@ -832,16 +836,36 @@ fn with_shell_chrome<'a>(
     app: &'a tauri::AppHandle<Wry>,
     builder: WebviewWindowBuilder<'a, Wry, tauri::AppHandle<Wry>>,
 ) -> tauri::Result<WebviewWindowBuilder<'a, Wry, tauri::AppHandle<Wry>>> {
-    let transparent = crate::config::get_store_dat_setting(app).appearance.transparency;
+    let appearance = crate::config::get_store_dat_setting(app).appearance;
+    let transparent = appearance.transparency;
     let builder = builder
         .transparent(transparent)
         .initialization_script(format!(
             "window.__DSH_TRANSPARENT__ = {transparent}; window.__DSH_STORE_FILE__ = {};",
             serde_json::json!(crate::config::store_dat_file_name())
         ))
+        // 启动期外观引导必须落在 document-start 且覆盖所有 frame：内嵌 dsh 的 boot 页
+        // （HARNESS + Loading plugins…）由内核在插件加载之前绘出，晚于首绘的帧桥改不动它。
+        .initialization_script_for_all_frames(crate::desktop::appearance::APPEARANCE_BOOTSTRAP_JS)
         .inner_size(1280.0, 840.0)
         .min_inner_size(860.0, 620.0)
         .resizable(true);
+
+    #[cfg(any(windows, target_os = "macos"))]
+    let builder = if appearance.native_blur_enabled() {
+        builder.effects(
+            tauri::window::EffectsBuilder::new()
+                .effects([
+                    tauri::window::Effect::Acrylic,
+                    tauri::window::Effect::Mica,
+                    tauri::window::Effect::UnderWindowBackground,
+                ])
+                .state(tauri::window::EffectState::FollowsWindowActiveState)
+                .build(),
+        )
+    } else {
+        builder
+    };
 
     #[cfg(windows)]
     let builder = builder
@@ -1026,7 +1050,7 @@ pub fn build_main_window(app: &tauri::AppHandle<Wry>) -> tauri::Result<tauri::We
 
     let webview_builder =
         WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
-            .title("Deepseek Harness Desktop");
+            .title(crate::desktop::product_name(app));
 
     // Windows/WebView2 在 build() 尚未返回时就可能绘制窗口。先隐藏创建，
     // 等保存的几何恢复完成再显示，避免启动时先闪出默认尺寸再跳到历史尺寸。
@@ -1065,7 +1089,8 @@ pub fn build_main_window(app: &tauri::AppHandle<Wry>) -> tauri::Result<tauri::We
 
     // 非 Windows（macOS/Linux）没有 WebView2 的 FrameCreated/ContentLoading 流程，
     // 直接用 Tauri 的 initialization_script_for_all_frames 把兼容桥、通知桥、
-    // 剪贴板图片桥、帧内日志桥与 boot 探测桥注入所有 frame（脚本均带幂等守卫，重复注入安全）。
+    // 剪贴板图片桥、帧内日志桥、启动期外观引导与 boot 探测桥注入所有 frame
+    // （脚本均带幂等守卫，重复注入安全）。
     // 导航桥（侧边栏）、缩放快捷键与 iframe 全局样式已分别由 dsh-tauri /
     // dsh-tauri-ui 插件在 iframe 内实现，不再注入对应脚本。
     #[cfg(not(windows))]
@@ -1194,7 +1219,7 @@ pub fn build_extra_window(app: &tauri::AppHandle<Wry>) -> tauri::Result<tauri::W
     build_shell_window(
         app,
         format!("window-{sequence}"),
-        "Deepseek Harness Desktop",
+        crate::desktop::product_name(app),
     )
 }
 
@@ -1371,6 +1396,22 @@ mod security_tests {
     }
 
     #[test]
+    fn native_appearance_effects_are_local_shell_only() {
+        let appearance: Value =
+            serde_json::from_str(include_str!("../../capabilities/appearance-effects.json")).unwrap();
+        // 这个能力一旦带上 remote，就会把窗口级 setEffects 暴露给回环承载的 Harness 页面。
+        assert!(appearance.get("remote").is_none());
+
+        let default_permissions = capability()["permissions"]
+            .as_array()
+            .expect("permissions must be an array")
+            .clone();
+        assert!(!default_permissions.iter().any(|permission| {
+            permission.as_str() == Some("core:window:allow-set-effects")
+        }));
+    }
+
+    #[test]
     fn pet_http_scope_is_limited_to_remote_asset_hosts() {
         // 桌宠窗口经插件版 fetch 直连远端素材（绕开 githubusercontent 的 CORS），
         // 但 scope 必须收口到素材主机：出现任意 https 通配等于把插件 fetch 面
@@ -1520,6 +1561,8 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::remove_profile,
         crate::bridge::reset_profile,
         crate::bridge::clone_profile,
+        crate::bridge::analyze_profile_migration,
+        crate::bridge::migrate_profile_data,
         crate::bridge::backup_profile,
         crate::bridge::export_recovery_backup,
         crate::bridge::restore_profile,
@@ -1535,6 +1578,8 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::runtime_ready,
         crate::bridge::get_app_config,
         crate::bridge::update_app_config,
+        crate::bridge::get_effective_heap_limit_mb,
+        crate::bridge::test_proxy,
         crate::bridge::get_launch_on_login,
         crate::bridge::set_launch_on_login,
         crate::bridge::get_cli_link_status,
@@ -1566,6 +1611,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::desktop::window::create_app_window,
         crate::desktop::builder::sync_view_menu,
         crate::desktop::window::quit_app,
+        crate::desktop::window::toggle_devtools,
         crate::bridge::log_frontend,
         crate::bridge::get_pet_status,
         crate::bridge::get_pet_overlay_supported,
@@ -1574,6 +1620,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
         crate::bridge::set_pet_enabled,
         crate::bridge::set_active_pet,
         crate::bridge::set_pet_size,
+        crate::bridge::set_pet_throw_enabled,
         crate::bridge::push_pet_session,
         crate::bridge::move_pet_window,
         crate::bridge::persist_pet_window_position,
@@ -1622,6 +1669,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         .manage(crate::desktop::pet_mouse::PetMouseStreamState::default())
         .setup(|app| {
             let app_handle = app.handle().clone();
+            crate::desktop::autostart::init(&app_handle)?;
             // 首装检测必须最先执行：窗口几何恢复/退出保存等任何 store 写入都会
             // 创建 store 文件，判定晚于它们会把首装误判为升级（见
             // config::detect_first_install 的时序说明）。
@@ -1698,6 +1746,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             | "desktop-harness"
             | "desktop-about"
             | "desktop-copy-run-logs"
+            | "desktop-toggle-devtools"
             | "desktop-check-update"
             | "desktop-restart"
             | "desktop-keyboard-shortcuts"
@@ -1836,12 +1885,6 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
     let builder = builder.plugin(crate::desktop::tauri_internals::shim());
 
     let builder = builder
-        // 官方跨平台登录启动实现：Windows HKCU Run、macOS LaunchAgent、Linux XDG。
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .app_name(crate::desktop::autostart::app_name())
-                .build(),
-        )
         // Opener plugin
         .plugin(tauri_plugin_opener::init())
         // Notification plugin（官方插件）：权限查询等通用通知能力。

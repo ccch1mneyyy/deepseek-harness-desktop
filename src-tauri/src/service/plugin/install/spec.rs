@@ -13,8 +13,8 @@ use super::PreinstallPluginInfo;
 /// 根路径与 `./` / `../` 显式相对路径都算；返回尚未绝对化的原始路径。
 ///
 /// 判定必须先于 [`package_name_of_spec`] 里「含 `:` 即放弃」的形态检查：Windows
-/// 盘符自带冒号，裸路径否则会被当成 git / URL 形态丢掉包名，安装前的只读检查也会
-/// 误报 `invalid-spec`。
+/// 盘符自带冒号，裸路径否则会被当成 git / URL 来源丢掉包名，安装前的只读检查也就
+/// 读不到本地清单、给不出名字与版本。
 pub(super) fn local_path_spec(spec: &str) -> Option<PathBuf> {
     let trimmed = unquote(spec.trim());
     if trimmed.is_empty() {

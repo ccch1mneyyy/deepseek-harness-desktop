@@ -38,6 +38,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
+pub mod migrate;
+
 /// 桌面端默认档案（内置，不可删除）
 pub const DEFAULT_PROFILE: &str = "web";
 
@@ -157,7 +159,7 @@ pub(crate) fn ensure_profile_pnpm_policy(app_handle: &AppHandle) -> Result<(), S
         .iter()
         .map(|package| (*package).to_string())
         .collect();
-    profile_release_age_excludes(app_handle, &entries)
+    release_age_excludes_at(&profile_dir_of(app_handle, &active_profile(app_handle)), &entries)
 }
 
 /// 档案的 `minimumReleaseAgeExclude` 里是否已经有这个精确 `包名@版本`。
@@ -198,15 +200,16 @@ pub(crate) fn allow_profile_release_age(
     if entries.is_empty() {
         return Err("PROFILE_RELEASE_AGE_EMPTY: no release-age exemption to record".to_string());
     }
-    profile_release_age_excludes(app_handle, entries)
+    release_age_excludes_at(&profile_dir_of(app_handle, &active_profile(app_handle)), entries)
 }
 
-/// 把 `entries` 并入档案 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（按需落盘）。
-fn profile_release_age_excludes(
-    app_handle: &AppHandle,
-    entries: &[String],
-) -> Result<(), String> {
-    let path = profile_dir_of(app_handle, &active_profile(app_handle)).join("pnpm-workspace.yaml");
+/// 把 `entries` 并入**指定档案目录** `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`
+/// （按需落盘）。
+///
+/// 收目录而不是 `AppHandle`：调用方可能持有「操作开始时捕获」的档案路径，半途用户切了
+/// 当前档案时，写入不能被改道到新档案（档案迁移即如此）。
+pub(crate) fn release_age_excludes_at(dir: &Path, entries: &[String]) -> Result<(), String> {
+    let path = dir.join("pnpm-workspace.yaml");
     let existing = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -725,7 +728,7 @@ fn copy_dir_tree(src: &Path, dst: &Path) -> Result<(), String> {
             let name = entry.file_name();
             // 仅跳过运行时产物（不随克隆迁移）
             if let Some(s) = name.to_str() {
-                if s == ".harness.pid" || s == ".backups" {
+                if crate::config::HARNESS_PID_MARKER_NAMES.contains(&s) || s == ".backups" {
                     return Ok(());
                 }
             }
@@ -1032,7 +1035,9 @@ mod clone_tests {
         let tmp = std::env::temp_dir().join(format!("dsh-clone-ok-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         let root = tmp.join("profiles");
-        scaffold_source(&root, "web");
+        let source = scaffold_source(&root, "web");
+        std::fs::write(source.join(".harness.pid"), "12345").unwrap();
+        std::fs::write(source.join(".harness-nightly.pid"), "23456").unwrap();
 
         let profile = clone_with_root(&root, "web", None).unwrap();
         assert_eq!(profile.id, "web-1");
@@ -1044,6 +1049,8 @@ mod clone_tests {
         assert!(dst.join("package.json").is_file());
         assert!(dst.join("cordis.patch.yml").is_file());
         assert!(dst.join("sub/deep.txt").is_file());
+        assert!(!dst.join(".harness.pid").exists());
+        assert!(!dst.join(".harness-nightly.pid").exists());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

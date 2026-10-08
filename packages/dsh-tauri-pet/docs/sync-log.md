@@ -26,6 +26,26 @@
 
 ## 同步记录
 
+### 2026 —— dsh-pet-component v0.2.4：仓库迁到 `dsh-tauri/`，单击语义改为「每次有效单击」
+
+不是上游同步，而是渲染层依赖升级（`dsh-pet-component@^0.2.3` → `^0.2.4`），
+记录在此以便核对单击语义与命令面。类型声明只增不改（`dist/index.d.mts` 净增 20 行），宿主侧无需改动。
+
+- **仓库迁移**：0.2.4 的 `package.json` 把 `homepage`/`repository`/`bugs` 由 `hairyf/dsh-pet-component` 改为
+  `dsh-tauri/dsh-pet-component`；`README.md`、`README.en.md`、`README.es.md` 的组件链接同步改名
+  （本文档历史条目保留当时的旧名；`docs/specs/upstram.sync.md` 已固定禁止修改，其 §1.1 仍写作 `hairyf/`）。
+- **单击语义**：原「双击（< `DOUBLE_CLICK_MS`）插播一次 waving、保留既有双击合约」改为**每次有效左键单击**
+  都插播一次 waving（dsh 侧取动作池 `animations.clicks`，Codex 配置走 waving 行）。本仓 `src/pet/app.tsx`
+  未使用单击/双击语义（`onHitboxPointerDown/Up` 交给 `useWindowDraggable`），观感变化仅是多一次动作插播。
+- **新增对话输入（本仓未启用）**：`PetCommonProps` 新增 `dialogue?: boolean`、`onDialogue?: PetDialogueHandler`、
+  `toastRef?: Ref<HTMLDivElement>`，`PetRef` 新增 `reply(text, options?)`，并导出 `PetReplyOptions`/`PetDialogueHandler`。
+  启用 `dialogue` 后 500 ms 内的第二次有效单击打开输入 toast；本仓气泡仍走宿主 `pet.bubble`，故不启用。
+- **供应链登记**：`minimumReleaseAgeExclude` 条目同步改为 `dsh-pet-component@0.2.4`（新版本未满最短发布时长）；
+  **删除** `trustPolicyExclude: dsh-pet-component@0.2.3` —— 0.2.4 带 npm provenance 证明，不再被
+  `trustPolicy: no-downgrade` 判为降级；删除后 `pnpm install --lockfile-only` 仍报
+  `✓ Lockfile passes supply-chain policies (1171 entries)`。
+- 校验：`pnpm typecheck`、`pnpm exec vitest run src/pet test/pet-asset-headers.test.ts`（97 passed）。
+
 ### 2026 —— 技能 `hatch-dsh-pet` 改述上游素材生成流程（上游 `README.md` @ `d73a2bb`，运行期基线不变）
 
 用户指出原技能「不是对 dsh-pet 视频生成流程的描述」：它只讲本机 Codex 图集契约，第 2 步直说

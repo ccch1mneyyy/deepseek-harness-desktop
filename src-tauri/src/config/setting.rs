@@ -81,6 +81,12 @@ pub struct Setting {
     /// 桌宠精灵图的显示宽度（逻辑像素）；`None` = 沿用窗口侧默认值。
     #[serde(default)]
     pub pet_size: Option<f64>,
+    /// 是否允许抛射桌宠（拖拽甩出后带速度飞行、撞到屏幕边缘回弹）。
+    ///
+    /// 默认关闭：飞行/回弹会打断「把宠物拖到某处」这一主要用途（issue #930），
+    /// 需要该效果的用户显式开启。拖拽本身不受此字段影响。
+    #[serde(default)]
+    pub throw_enabled: bool,
     /// 强制以 XWayland 运行（默认关闭，下次启动生效）。
     ///
     /// 影响的是整个应用而非只有桌宠：原生 Wayland 下桌宠既不能置顶也不能定位
@@ -211,6 +217,7 @@ impl Default for Setting {
             pet_enabled: false,
             active_pet: None,
             pet_size: None,
+            throw_enabled: false,
             force_xwayland: false,
             local_plugin_hmr: default_local_plugin_hmr(),
         }
@@ -357,6 +364,7 @@ fn preserve_persisted_fields(mut replacement: Setting, current: &Setting) -> Set
     replacement.pet_enabled = current.pet_enabled;
     replacement.active_pet.clone_from(&current.active_pet);
     replacement.pet_size = current.pet_size;
+    replacement.throw_enabled = current.throw_enabled;
     replacement.force_xwayland = current.force_xwayland;
     replacement.local_plugin_hmr = current.local_plugin_hmr;
     replacement
@@ -709,6 +717,7 @@ mod tests {
             pet_enabled: false,
             active_pet: Some("chat:stale".to_string()),
             pet_size: Some(80.0),
+            throw_enabled: false,
             force_xwayland: false,
             local_plugin_hmr: false,
             ..Default::default()
@@ -720,6 +729,7 @@ mod tests {
                 palette: "nord".into(),
                 terminal: true,
                 opacity: 70,
+                blur: true,
                 transparency: true,
                 sidebar_only: true,
             },
@@ -729,6 +739,7 @@ mod tests {
             pet_enabled: true,
             active_pet: Some("codex:latest".to_string()),
             pet_size: Some(140.0),
+            throw_enabled: true,
             force_xwayland: true,
             local_plugin_hmr: true,
             ..Default::default()
@@ -754,6 +765,7 @@ mod tests {
             Some(140.0),
             "整对象写入不得覆盖最新桌宠字段"
         );
+        assert!(merged.throw_enabled, "整对象写入不得覆盖最新的抛射开关");
         assert!(
             merged.force_xwayland,
             "整对象写入不得覆盖最新的 XWayland 开关"

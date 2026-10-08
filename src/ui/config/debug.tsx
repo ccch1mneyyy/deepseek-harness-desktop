@@ -1,6 +1,6 @@
 import type { RuntimeInfo } from '@/types'
 import { ArrowRotateRight, ArrowUpRightFromSquare, ChevronRight, CircleInfo, Copy, Power } from '@gravity-ui/icons'
-import { Button, Chip, Description, Input, Link, ListBox, Select, Spinner, Switch, Tooltip } from '@heroui/react'
+import { Button, Chip, Description, Input, InputGroup, Link, ListBox, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { invoke } from '@tauri-apps/api/core'
 import { useState } from 'react'
@@ -20,8 +20,6 @@ import { useCoreProfileSwitch } from '@/ui/config/hooks/use-core-profile-switch'
 import { writeClipboardText } from '@/utils/clipboard'
 import { toast } from '@/utils/toast'
 
-const ZOOM_OPTIONS = Array.from({ length: 16 }, (_, index) => Number((0.5 + index * 0.1).toFixed(1)))
-
 export interface CliLinkStatus {
   enabled: boolean
   shim_exists: boolean
@@ -29,6 +27,19 @@ export interface CliLinkStatus {
   user_dsh_preserved: boolean
   bin_dir: string
   shim_path: string
+}
+
+export interface ProxyTestResult {
+  ok: boolean
+  reason: 'invalid' | 'timeout' | 'connect' | 'request' | 'status' | null
+  status: number | null
+  latency_ms: number
+}
+
+const PROXY_TEST_MESSAGE: Record<string, string> = {
+  timeout: 'network.test_timeout',
+  connect: 'network.test_connect',
+  status: 'network.test_status',
 }
 
 export function ConfigDebug() {
@@ -54,7 +65,7 @@ export function ConfigDebug() {
     void refreshInfo()
   })
 
-  const { port: savedPort, proxy_url: savedProxy, zoom_factor: zoomFactor, harness_max_heap_mb: savedHeapMb } = useStore(store.setting)
+  const { port: savedPort, proxy_url: savedProxy, harness_max_heap_mb: savedHeapMb } = useStore(store.setting)
   const port = portInput ?? savedPort
   const proxy = proxyInput ?? savedProxy
   const heapValue = heapInput ?? String(savedHeapMb ?? '')
@@ -96,11 +107,6 @@ export function ConfigDebug() {
       console.error('[ConfigDebug] toggle cli link failed:', err)
       toast(t('messages.cli_link_failed'), { variant: 'danger' })
     },
-  })
-
-  const { mutate: onSetZoom } = useMutation({
-    mutationFn: (zoomFactor: number) => store.setting.update({ zoomFactor }),
-    onError: () => toast(t('messages.zoom_save_failed'), { variant: 'danger' }),
   })
 
   const { mutate: onCopyServiceUrl } = useMutation({
@@ -162,7 +168,7 @@ export function ConfigDebug() {
     },
   })
 
-  const { mutate: onSaveProxy } = useMutation({
+  const { mutate: onSaveProxy, isPending: savingProxy } = useMutation({
     mutationFn: async (value: string) => {
       const proxyUrl = value.trim()
       if (proxyUrl) {
@@ -191,6 +197,21 @@ export function ConfigDebug() {
     },
     onError: (error: unknown) => {
       toast(t(String(error).includes('PROXY_INVALID') ? 'network.invalid' : 'network.save_failed'), { variant: 'danger' })
+    },
+  })
+
+  const { mutate: runProxyTest, isPending: testingProxy } = useMutation({
+    mutationFn: () => invoke<ProxyTestResult>('test_proxy'),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast(t('network.test_ok', { ms: result.latency_ms }), { variant: 'success' })
+        return
+      }
+      const key = PROXY_TEST_MESSAGE[result.reason ?? ''] ?? 'network.test_failed'
+      toast(t(key, { status: result.status ?? '' }), { variant: 'danger' })
+    },
+    onError: () => {
+      toast(t('network.test_failed'), { variant: 'danger' })
     },
   })
 
@@ -227,7 +248,21 @@ export function ConfigDebug() {
 
   return (
     <div className="space-y-3">
-      <Panel.Header title={t('config.application')} testId="dsh-config-panel-title" />
+      <Panel.Header
+        title={t('config.application')}
+        testId="dsh-config-panel-title"
+        action={(
+          <Button
+            size="sm"
+            variant="tertiary"
+            isDisabled={!info || copyingEnvironment}
+            onPress={() => onCopyEnvironment()}
+          >
+            <If cond={copyingEnvironment} then={<Spinner size="sm" color="current" />} else={<Copy className="size-3.5" />} />
+            {t('buttons.copy_environment')}
+          </Button>
+        )}
+      />
       {coreBreakingHolder}
       {coreProfileSwitchHolder}
       <div className="space-y-1.5">
@@ -318,17 +353,6 @@ export function ConfigDebug() {
             {info ? `${info.platform} / ${info.arch}` : '-'}
           </Info>
         </div>
-        <div className="mt-2 flex justify-end">
-          <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={!info || copyingEnvironment}
-            onPress={() => onCopyEnvironment()}
-          >
-            <If cond={copyingEnvironment} then={<Spinner size="sm" color="current" />} else={<Copy className="size-3.5" />} />
-            {t('buttons.copy_environment')}
-          </Button>
-        </div>
       </div>
       <div className="border-t border-line/30" />
       <div className="space-y-1.5">
@@ -356,36 +380,6 @@ export function ConfigDebug() {
             </Select.Popover>
           </Select>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-ink">{t('ui.zoom')}</span>
-          <Select
-            variant="secondary"
-            selectedKey={String(zoomFactor)}
-            onSelectionChange={key => onSetZoom(Number(key))}
-            className="w-[80px]"
-            aria-label={t('ui.zoom')}
-          >
-            <Select.Trigger className="min-h-8! h-8 py-0 items-center">
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {ZOOM_OPTIONS.map(zoomFactor => (
-                  <ListBox.Item
-                    className="min-h-8!"
-                    id={String(zoomFactor)}
-                    key={zoomFactor}
-                    textValue={`${Math.round(zoomFactor * 100)}%`}
-                  >
-                    {`${Math.round(zoomFactor * 100)}%`}
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
-
         <div className="border-t border-line/30" />
 
         <div className="flex items-center justify-between gap-2">
@@ -400,7 +394,7 @@ export function ConfigDebug() {
           </span>
           <div className="flex items-center gap-1.5">
             <Input
-              type="password"
+              type="text"
               autoComplete="off"
               spellCheck={false}
               variant="secondary"
@@ -411,6 +405,26 @@ export function ConfigDebug() {
               aria-label={t('network.proxy_url')}
               data-testid="dsh-proxy-url"
             />
+            <Tooltip delay={0}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8"
+                onPress={() => {
+                  // 测试只针对已保存的配置：输入框里有未保存的修改时先保存，避免测到旧值
+                  if (proxy === savedProxy) {
+                    runProxyTest()
+                    return
+                  }
+                  onSaveProxy(proxy, { onSuccess: () => runProxyTest() })
+                }}
+                isDisabled={testingProxy || savingProxy || proxy.trim() === ''}
+                data-testid="dsh-proxy-test"
+              >
+                <If cond={testingProxy} then={<Spinner size="sm" color="current" />} else={t('network.test')} />
+              </Button>
+              <Tooltip.Content className="max-w-[320px]">{t('network.test_hint')}</Tooltip.Content>
+            </Tooltip>
             <Button
               size="sm"
               variant="primary"
@@ -447,15 +461,18 @@ export function ConfigDebug() {
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-ink">{t('ui.heap_limit')}</span>
           <div className="flex items-center gap-1.5">
-            <Input
-              type="number"
-              variant="secondary"
-              value={heapValue}
-              placeholder={t('ui.heap_limit_auto')}
-              onChange={e => setHeapInput(e.target.value)}
-              className="w-24 h-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              aria-label={t('ui.heap_limit')}
-            />
+            <InputGroup variant="secondary" className="w-24 h-8 min-h-8!">
+              <InputGroup.Input
+                type="number"
+                value={heapValue}
+                placeholder={t('ui.heap_limit_auto')}
+                onChange={e => setHeapInput(e.target.value)}
+                className="min-w-0 py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                aria-label={t('ui.heap_limit')}
+                data-testid="dsh-config-heap-input"
+              />
+              <InputGroup.Suffix className="px-1.5" data-testid="dsh-config-heap-unit">MB</InputGroup.Suffix>
+            </InputGroup>
             <Button
               size="sm"
               variant="primary"

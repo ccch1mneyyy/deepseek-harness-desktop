@@ -5,11 +5,9 @@ use std::sync::Arc;
 
 #[cfg(windows)]
 use tauri::webview::{PageLoadEvent, PageLoadPayload};
-#[cfg(windows)]
-use tauri::WebviewWindow;
 use tauri::{
     webview::{DownloadEvent, NewWindowFeatures, NewWindowResponse},
-    AppHandle, Emitter, Runtime, Url, Webview, Wry,
+    AppHandle, Emitter, Runtime, Url, Webview, WebviewWindow, Wry,
 };
 use tauri_plugin_opener::OpenerExt;
 
@@ -133,4 +131,18 @@ pub async fn create_app_window(app_handle: AppHandle<Wry>) -> Result<(), String>
 #[tauri::command]
 pub fn quit_app(app_handle: AppHandle<Wry>) {
     app_handle.exit(0);
+}
+
+/// 壳层「帮助 → 切换开发者工具」：开/关调用方所在窗口的 WebView 检查器。
+///
+/// 「切换」只能做到近似：只有 macOS 的 wkwebview 如实回报检查器状态；
+/// Windows 侧（wry 0.55 + WebView2）`is_devtools_open()` 恒为 false 且
+/// `close_devtools()` 是空实现，重复调用等价于再次打开/聚焦，不会误关。
+#[tauri::command]
+pub fn toggle_devtools(window: WebviewWindow<Wry>) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
 }

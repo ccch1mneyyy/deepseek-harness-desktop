@@ -1,4 +1,4 @@
-export const APPEARANCE_DEFAULTS = { palette: 'default', terminal: false, transparency: false, opacity: 100, sidebarOnly: false } as const
+export const APPEARANCE_DEFAULTS = { palette: 'default', terminal: false, transparency: false, opacity: 100, blur: false, sidebarOnly: false } as const
 export const APPEARANCE_PALETTES = ['default', 'nord', 'solarized', 'forest', 'amber', 'github', 'github-dimmed', 'github-high-contrast'] as const
 
 export interface Appearance {
@@ -6,11 +6,12 @@ export interface Appearance {
   terminal: boolean
   transparency: boolean
   opacity: number
+  blur: boolean
   sidebarOnly: boolean
 }
 
 export function normalizeAppearance(value: unknown): Appearance {
-  const input = value as Partial<Appearance> | null
+  const input = value as (Omit<Partial<Appearance>, 'blur'> & { blur?: unknown }) | null
   const opacity = typeof input?.opacity === 'number' && Number.isFinite(input.opacity)
     ? Math.round(Math.min(100, Math.max(20, input.opacity)))
     : 100
@@ -19,8 +20,37 @@ export function normalizeAppearance(value: unknown): Appearance {
     terminal: input?.terminal === true,
     transparency: input?.transparency === undefined ? opacity < 100 : input.transparency === true,
     opacity,
+    blur: input?.blur === true || (typeof input?.blur === 'number' && input.blur > 0),
     sidebarOnly: input?.sidebarOnly === true,
   }
+}
+
+export function appearanceSidebarFill(canvas: string, panel: string, translucent: boolean, percent: number): string {
+  return translucent ? `color-mix(in srgb,${canvas} ${percent}%,transparent)` : panel
+}
+
+/** 「背景真的半透明」只有一个定义：窗口开了透明且 alpha 未满。 */
+export function appearanceTranslucent(appearance: Appearance): boolean {
+  return appearance.transparency && appearance.opacity < 100
+}
+
+/** 启动页填充色：与 navbar / 侧边栏同源同 alpha，100% 或不透明时回到实心 canvas。 */
+export function appearanceStartupFill(appearance: Appearance, canvas: string): string {
+  return appearanceSidebarFill(canvas, canvas, appearanceTranslucent(appearance), appearance.opacity)
+}
+
+export function appearanceBootCss(appearance: Appearance): string {
+  if (!appearanceTranslucent(appearance))
+    return ''
+  const blocks = (['dark', 'light'] as const).map((scheme) => {
+    const { canvas } = appearanceColors(appearance, scheme)
+    const selector = scheme === 'dark' ? 'body[data-ds-dark-theme]' : 'body:not([data-ds-dark-theme])'
+    return `${selector} > #root > [data-dsh-boot]{background:${appearanceStartupFill(appearance, canvas)}!important}`
+  })
+  return [
+    'html:has(>body>#root>[data-dsh-boot]),body:has(>#root>[data-dsh-boot]),#root:has(>[data-dsh-boot]){background:transparent!important}',
+    ...blocks,
+  ].join('\n')
 }
 
 type Palette = readonly [canvas: string, panel: string, surface: string, text: string, muted: string, accent: string, border?: string]

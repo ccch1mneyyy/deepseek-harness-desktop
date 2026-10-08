@@ -7,6 +7,8 @@ export interface PetStatus {
   active_pet: string
   enabled: boolean
   pet_size?: number | null
+  /** 是否允许抛射（默认关闭，issue #930）。 */
+  throw_enabled: boolean
   visible: boolean
 }
 

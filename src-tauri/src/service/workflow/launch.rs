@@ -607,6 +607,13 @@ pub async fn launch(app_handle: tauri::AppHandle) -> Result<(), String> {
         envs.insert("DSH_PREFER_BUNDLED_PNPM".to_string(), "1".to_string());
     }
 
+    // 桌面端代理设置（issue #110）：核心（dsh-http-proxy）在启动时读
+    // `http_proxy` / `https_proxy` / `no_proxy` 发布代理策略，再给**它自己** spawn
+    // 的子进程补 `NODE_USE_ENV_PROXY`；桌面端 spawn 的这个服务进程不在那条链路上，
+    // 必须显式下发，否则配置页的代理只作用于桌面端自身的下载与更新请求。
+    // 最佳努力：空值返回空 map，不覆盖用户已有的同名环境变量。
+    envs.extend(config::proxy::proxy_child_env(&setting.proxy_url));
+
     // 内嵌 WebView 是 `tauri.localhost` 下的跨源沙箱 iframe，`SameSite=Strict` 的
     // browser-session Cookie 不会被携带。载体标记交给 dsh-tauri 插件（载体鉴权适配）：
     // 只有该标记在场时它才覆写 connection 的鉴权闸门，因此同一 profile 下独立运行
@@ -638,15 +645,47 @@ pub async fn launch(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
     mark_phase("patch_entry_preflight", &mut phase_started);
 
-    let node_options = std::env::var("NODE_OPTIONS").ok();
+    let inherited_heap_mb = super::heap::node_options_heap_limit_mb();
+    let inherited_heap_flags = super::heap::node_options_has_heap_flags_env();
     let heap_mb = super::heap::resolve_heap_limit_mb(
         setting.harness_max_heap_mb,
-        node_options.as_deref(),
+        inherited_heap_flags,
         super::heap::physical_memory_mb(),
     );
-    match heap_mb {
-        Some(mb) => log::info!("Starting Harness process with --max-old-space-size={mb}"),
-        None => log::info!("Starting Harness process with Node default or inherited heap options"),
+    // 命令行 `--max-old-space-size` 压得住 NODE_OPTIONS 里的同名 flag，却压不住
+    // `--max-old-space-size-percentage`（V8 实测：只写 percentage 时命令行上限被
+    // 完全无视）。既然这次要显式下发用户设置，就把继承来的堆 flag 从子进程环境里
+    // 摘掉——只删堆相关项，`--require` 等其余选项原样保留；否则「已设置 16384」
+    // 仍可能是一句谎话。
+    if super::heap::heap_option_arg(heap_mb).is_some() {
+        if let Ok(node_options) = std::env::var("NODE_OPTIONS") {
+            if super::heap::node_options_has_heap_flags(&node_options) {
+                let stripped = super::heap::node_options_without_heap_flags(&node_options);
+                log::info!(
+                    "Dropped inherited heap flags from NODE_OPTIONS for the Harness process (kept={:?})",
+                    stripped
+                );
+                envs.insert("NODE_OPTIONS".to_string(), stripped.unwrap_or_default());
+            }
+        }
+    }
+    // 提示里说的上限必须与进程真正拿到的上限一致，否则用户会看到「已设置 8192
+    // 还提示 8192」这种自相矛盾的诊断（详见 heap.rs 的优先级说明）。
+    match super::heap::effective_limit_mb(heap_mb, inherited_heap_mb) {
+        Some(mb) => log::info!(
+            "Starting Harness process with effective heap limit {mb} MB (configured={:?}, inherited_from_node_options={:?})",
+            setting.harness_max_heap_mb,
+            inherited_heap_mb
+        ),
+        None if inherited_heap_flags => log::info!(
+            "Starting Harness process with the heap limit inherited from NODE_OPTIONS (configured={:?})",
+            setting.harness_max_heap_mb
+        ),
+        None => log::info!(
+            "Starting Harness process with the Node default heap limit (configured={:?}, inherited_from_node_options={:?})",
+            setting.harness_max_heap_mb,
+            inherited_heap_mb
+        ),
     }
 
     // dsh 的 Loader 在插件 dispose 时会把组合后的整棵 entry 树回写进

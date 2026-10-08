@@ -40,31 +40,19 @@ beforeEach(() => {
 })
 
 describe('plugins manager settle', () => {
-  it('asks before restarting instead of restarting a succeeding group on its own', async () => {
+  it('settles without offering a restart: the host hot-reloads plugins itself', async () => {
     invoke.mockResolvedValue(undefined)
 
     const results = await plugins.enqueue('install', ['a', 'b'], { toast: true, restartOnSettle: true })
 
     expect(results.every(result => result.ok)).toBe(true)
     expect(restart).not.toHaveBeenCalled()
-    const prompt = toast.mock.calls.find(call => call[1]?.actionProps !== undefined)
-    expect(prompt?.[1]?.timeout).toBe(0)
-    prompt?.[1]?.actionProps?.onPress?.()
-    expect(toast.close).toHaveBeenCalled()
-    expect(restart).toHaveBeenCalledTimes(1)
-  })
-
-  it('folds the restart button into the single result toast instead of adding a second one', async () => {
-    invoke.mockResolvedValue(undefined)
-
-    await plugins.enqueue('install', ['a'], { toast: true, restartOnSettle: true })
-
-    const toasts = toast.mock.calls.filter(call => call[1]?.isLoading !== true)
-    expect(toasts).toHaveLength(1)
-    expect(toasts[0][1]?.timeout).toBe(0)
-    toasts[0][1]?.actionProps?.onPress?.()
-    expect(toast.close).toHaveBeenCalled()
-    expect(restart).toHaveBeenCalledTimes(1)
+    // 队列自己热更新插件，结果气泡里不能再挂「重启」按钮，也不能常驻（timeout: 0）；
+    // 进度气泡（isLoading）本来就是常驻的，只检查结果气泡。
+    const resultToasts = toast.mock.calls.filter(call => call[1]?.isLoading !== true)
+    expect(resultToasts.length).toBeGreaterThan(0)
+    expect(resultToasts.every(call => call[1]?.actionProps === undefined)).toBe(true)
+    expect(resultToasts.every(call => call[1]?.timeout !== 0)).toBe(true)
   })
 
   it('leaves the harness running when restartOnSettle is disabled', async () => {

@@ -8,13 +8,14 @@ import { useDshShortcuts } from '@/hooks/use-dsh-shortcuts'
 import { Navbar } from './navbar'
 import { Webview } from './webview'
 
-const { store, userAgent, openOverlay, openUrl } = vi.hoisted(() => {
+const { store, userAgent, openOverlay, openUrl, toggleDevtools } = vi.hoisted(() => {
   const userAgent = navigator.userAgent
   Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Macintosh' })
   return {
     userAgent,
     openOverlay: vi.fn().mockResolvedValue(undefined),
     openUrl: vi.fn<(args: { url: string }) => Promise<void>>(),
+    toggleDevtools: vi.fn<() => Promise<void>>(),
     store: {
       harness: { status: 'ready', serviceHealthy: true },
       recovery: { recovery: { required: false } },
@@ -102,6 +103,7 @@ beforeEach(() => {
   listeners.clear()
   openOverlay.mockClear()
   openUrl.mockReset().mockResolvedValue(undefined)
+  toggleDevtools.mockReset().mockResolvedValue(undefined)
   menuEntries = []
   store.harness.status = 'ready'
   store.harness.serviceHealthy = true
@@ -111,6 +113,8 @@ beforeEach(() => {
     switch (command) {
       case 'open_external_url':
         return openUrl(args as { url: string })
+      case 'toggle_devtools':
+        return toggleDevtools()
       case 'plugin:event|listen': {
         const listener = args as unknown as Listener
         listeners.set(listener.handler, listener)
@@ -262,5 +266,14 @@ describe('native Help menu links', () => {
     act(() => nativeEvent('macos-menu-action', action, 'main'))
 
     await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith({ url }))
+  })
+
+  it('toggles the shell window developer tools from the native item', async () => {
+    render(<Navbar onRemoteChange={vi.fn()} />)
+    await waitFor(() => expect([...listeners.values()].filter(listener => listener.event === 'macos-menu-action')).toHaveLength(1))
+
+    act(() => nativeEvent('macos-menu-action', 'desktop-toggle-devtools', 'main'))
+
+    await waitFor(() => expect(toggleDevtools).toHaveBeenCalledExactlyOnceWith())
   })
 })

@@ -1,7 +1,7 @@
 {
   "name": "deepseek-harness-desktop",
   "type": "module",
-  "version": "0.22.2",
+  "version": "0.22.4",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "description": "Desktop application for DeepSeek Harness (dsh) — one-click local install and launch, no Node.js setup required.",
@@ -26,7 +26,7 @@
     "lint": "eslint",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit",
-    "icons": "tauri icon public/favicon.svg && tsx scripts/rebuild-macos-icon.ts",
+    "icons": "tauri icon public/deepseek-harness-desktop-tauri.svg --output src-tauri/icons && tauri icon public/deepseek-harness-desktop-tauri-nightly.svg --output src-tauri/icons/nightly --ios-color \"#000000\" && tsx scripts/rebuild-macos-icon.ts",
     "dev:native": "expo start --dev-client",
     "android": "expo run:android",
     "build:native": "expo export --platform android --output-dir .temp/native-android-export",

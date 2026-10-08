@@ -1,5 +1,5 @@
 import type { Profile } from '@/types'
-import { Plus } from '@gravity-ui/icons'
+import { CopyArrowRight, Plus } from '@gravity-ui/icons'
 import { AlertDialog, Button, Checkbox, Chip, Description, Input, Label } from '@heroui/react'
 import { useOverlay } from '@overlastic/react'
 import { useToggle } from '@reause/core'
@@ -18,6 +18,7 @@ import { useInvalidateOnSettingUpdated } from '@/hooks/use-invalidate-on-setting
 import { store } from '@/store'
 import { waitForHarnessStopped } from '@/store/modules/harness'
 import { ConfigBackup } from '@/ui/config/backup'
+import { ProfileMigrateDialog } from '@/ui/dialog/profile-migrate'
 import { normalizeProfileId } from '@/utils/profile-id'
 import { silence } from '@/utils/silence'
 import { toast } from '@/utils/toast'
@@ -106,8 +107,13 @@ export function ConfigProfile() {
   const profiles = profileList ?? []
   const loading = isLoading
   const error = profileError ? String(profileError) : ''
+  /** 当前使用中的档案，即迁移的目标（不可更改） */
+  const activeProfile = profiles.find(profile => profile.active)
   /** 操作进行中标记（新建/切换/删除/重置/克隆任一） */
   const busy = create.isPending || activate.isPending || remove.isPending || reset.isPending || clone.isPending
+
+  /** 迁移入口的禁用条件：操作进行中、没有当前档案、或没有第二个档案可作来源 */
+  const migrateBlocked = busy || !activeProfile || profiles.length < 2
 
   const [dialogHolder, openDialog] = useOverlay(Modal, { type: 'holder' })
 
@@ -119,6 +125,9 @@ export function ConfigProfile() {
   // 克隆档案：命名对话框状态
   const [cloning, setCloning] = useState<{ sourceId: string, sourceName: string } | null>(null)
   const [cloneName, setCloneName] = useState('')
+
+  // 迁移档案数据：来源档案在对话框内选择，目标恒为当前使用中的档案
+  const [migrateDialogHolder, openMigrateDialog] = useOverlay(ProfileMigrateDialog, { type: 'holder' })
 
   /**
    * 档案名会直接当磁盘目录名与 CLI `--profile` 参数，只能用 ASCII 字母数字（`-`/`_`/空格
@@ -363,7 +372,22 @@ export function ConfigProfile() {
 
   return (
     <div className="space-y-3">
-      <Panel.Header title={t('profiles.title')} description={t('profiles.tooltip')} testId="dsh-config-panel-title" />
+      <Panel.Header
+        title={t('profiles.title')}
+        description={t('profiles.tooltip')}
+        testId="dsh-config-panel-title"
+        action={(
+          <Button
+            size="sm"
+            variant="primary"
+            isDisabled={migrateBlocked}
+            onPress={() => void openMigrateDialog()}
+          >
+            <CopyArrowRight className="size-3.5" />
+            {t('profiles.migrate')}
+          </Button>
+        )}
+      />
 
       {/* 加载 / 失败 / 列表 */}
       <Panel.Loadable loading={loading} error={error}>
@@ -495,6 +519,7 @@ export function ConfigProfile() {
         </div>
       </Panel.Loadable>
       {dialogHolder}
+      {migrateDialogHolder}
 
       {/* 克隆档案：命名对话框（创建型，accent；可编辑建议名称） */}
       <AlertDialog

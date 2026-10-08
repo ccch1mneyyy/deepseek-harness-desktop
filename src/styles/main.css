@@ -72,6 +72,7 @@
   --backdrop: rgba(0, 0, 0, 0.5);
   /* === 壳层自有 token === */
   --color-canvas: #151517;             /* bg-base (bluish-950) */
+  --color-startup: #151517;            /* 启动页底色：默认与画布同色，开启透明度时由外观投影接管 */
   --color-panel: #1b1b1c;              /* specific-sidebar-fill (bluish-900) */
   --color-panel-2: #2c2c2e;            /* bg-layer-2 (bluish-850) */
   --color-panel-hover: #2c2c2e;        /* sidebar-nav-item-hover (bluish-850) */
@@ -87,7 +88,6 @@
   --color-scroll-thumb: rgba(84, 85, 87, 0.45);     /* neutral-600 */
   --color-scroll-thumb-strong: rgba(60, 60, 61, 0.6); /* neutral-700 */
   /* 加载页 token：取值与官方 web shell boot 页（dsw alias token）逐项一致 */
-  --color-load-bg: #151517;
   --color-load-ink: #f9fafb;
   --color-load-muted: #adb2b8;
   --color-load-ring: rgba(255, 255, 255, 0.12);
@@ -112,6 +112,7 @@
 html[data-theme="light"] {
   --backdrop: rgba(0, 0, 0, 0.24);
   --color-canvas: #ffffff;             /* bg-base (bluish-00) */
+  --color-startup: #ffffff;            /* 启动页底色：默认与画布同色 */
   --color-panel: #f9fafb;              /* specific-sidebar-fill (bluish-50) */
   --color-panel-2: #f5f6f7;            /* bg-module-platform / selector (bluish-60) */
   --color-panel-hover: #f1f3f5;        /* sidebar-nav-item-hover (bluish-75) */
@@ -126,7 +127,6 @@ html[data-theme="light"] {
   --color-scroll-thumb: rgba(212, 212, 212, 0.8);   /* neutral-300 */
   --color-scroll-thumb-strong: rgba(229, 229, 229, 0.9); /* neutral-200 */
   /* 加载页 token：light 主题对应官方 alias 值 */
-  --color-load-bg: #ffffff;
   --color-load-ink: #0f1115;
   --color-load-muted: #81858c;
   --color-load-ring: rgba(0, 0, 0, 0.1);

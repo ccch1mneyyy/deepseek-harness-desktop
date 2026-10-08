@@ -30,9 +30,11 @@ const TRAIL_LIMIT = 64
  *   `throwPower` 放大因此只能在那里做 —— 默认值 1 时与组件参考实现完全等价；
  * - **单位是 CSS px**：重力/速度都按组件默认参数的语义（CSS px/s）算，写回窗口时乘
  *   `devicePixelRatio` 换成物理像素；Retina 上不去换算，观感速度会差一倍；
- * - 单宠物窗口没有宠物间碰撞，`physics.petCollision` 与 `pet.bounce` 不适用。
+ * - 单宠物窗口没有宠物间碰撞，`physics.petCollision` 与 `pet.bounce` 不适用；
+ * - **抛射开关默认关闭**（issue #930）：`throwEnabled` 为假时松手只结算并清状态，
+ *   不请求甩出，因此没有飞行也没有撞边回弹；拖拽本身照常工作。
  */
-export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): PetPhysicsControls {
+export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined, throwEnabled: boolean): PetPhysicsControls {
   const trailRef = useRef<DragSample[]>([])
   /** 是否抓住了宠物（信号来自命中箱 `pointerdown`，见 `onGrab`）：轨迹只在抓取后采样。 */
   const pressedRef = useRef(false)
@@ -41,6 +43,8 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): P
   const flightIdRef = useRef(0)
   const kindRef = useRef(kind)
   kindRef.current = kind
+  const throwEnabledRef = useRef(throwEnabled)
+  throwEnabledRef.current = throwEnabled
   // useRafFn 每渲染返回新对象，飞行循环统一走 ref，避免闭包抓到旧的 pause/resume。
   const rafRef = useRef<{ pause: () => void, resume: () => void } | null>(null)
 
@@ -145,6 +149,9 @@ export function usePetPhysics(pet: PetRef, kind: 'dsh' | 'codex' | undefined): P
 
     const trail = trailRef.current
     trailRef.current = []
+    // 抛射关闭时不起飞行：松手照常结算、清掉按住状态，但宠物就停在原地。
+    if (!throwEnabledRef.current)
+      return
     const release = estimateReleaseVelocity(trail, performance.now(), 1)
     if (release !== null)
       pet.fling(release)

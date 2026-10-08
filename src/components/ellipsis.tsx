@@ -46,9 +46,8 @@ export function Ellipsis(props: EllipsisProps & VariantProps<typeof ellipsis>) {
   }
 
   return (
-    <Tooltip isOpen={open} onOpenChange={onOpenChange}>
-      <div
-        ref={triggerRef}
+    <Tooltip delay={500} isOpen={open} onOpenChange={onOpenChange}>
+      <Tooltip.Trigger
         className={cn(
           props.lineClamp === undefined ? 'truncate' : 'line-clamp-[var(--line-clamp)] [display:-webkit-inline-box]!',
           container({ className: props.className }),
@@ -58,9 +57,19 @@ export function Ellipsis(props: EllipsisProps & VariantProps<typeof ellipsis>) {
             '--line-clamp': props.lineClamp,
           } as React.CSSProperties
         }
+        render={({ ref, ...triggerProps }) => (
+          <div
+            {...triggerProps}
+            ref={(node) => {
+              triggerRef.current = node
+              if (typeof ref === 'function')
+                ref(node)
+            }}
+          />
+        )}
       >
         {props.lineClamp ? props.children : <span>{props.children}</span>}
-      </div>
+      </Tooltip.Trigger>
       <Tooltip.Content className={cn(tooltip(), props.tooltipClassName)}>
         {props.tooltip || props.children}
       </Tooltip.Content>

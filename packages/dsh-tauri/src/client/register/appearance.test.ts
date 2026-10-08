@@ -80,11 +80,64 @@ describe('desktop appearance bridge', () => {
     expect(document.querySelector('style')!.textContent).toContain('#eceff4 70%')
   })
 
+  it('paints the translucent canvas once: a backdrop filter would composite the fill twice', () => {
+    const { send } = setup()
+    send({ palette: 'nord', transparency: true, opacity: 70, blur: true })
+    const css = document.querySelector('style')!.textContent!
+    expect(css).toContain('body{background:color-mix(in srgb,#2e3440 70%,transparent)!important}')
+    expect(css).not.toContain('backdrop-filter')
+    send({ transparency: false, opacity: 70, blur: true })
+    expect(document.querySelector('style')!.textContent).toBe('')
+  })
+
+  it.each([false, true])('fills a still-mounted boot page like the shell bar when sidebarOnly=%s', (sidebarOnly) => {
+    const { send } = setup()
+    document.body.innerHTML = '<div id="root"><div data-dsh-boot><span>HARNESS</span><span>Loading plugins...</span></div></div>'
+    const boot = document.querySelector('[data-dsh-boot]')!
+    const markup = boot.outerHTML
+    send({ palette: 'nord', transparency: true, opacity: 70, sidebarOnly })
+    const css = document.querySelector('style')!.textContent!
+    expect(css).toContain('body[data-ds-dark-theme] > #root > [data-dsh-boot]{background:color-mix(in srgb,#2e3440 70%,transparent)!important}')
+    expect(css).toContain('body:not([data-ds-dark-theme]) > #root > [data-dsh-boot]{background:color-mix(in srgb,#eceff4 70%,transparent)!important}')
+    expect(css).not.toContain('#root > [data-dsh-boot]{background:transparent')
+    expect(boot.outerHTML).toBe(markup)
+  })
+
+  it('keeps the boot page opaque unless transparency is effective', () => {
+    const { send } = setup()
+    document.body.innerHTML = '<div id="root"><div data-dsh-boot></div></div>'
+    send({ palette: 'nord', transparency: false, opacity: 70 })
+    expect(document.querySelector('style')!.textContent).toBe('')
+    send({ palette: 'nord', transparency: true, opacity: 100 })
+    expect(document.querySelector('style')!.textContent).toBe('')
+  })
+
+  it('acknowledges each applied appearance only after its stylesheet and tokens are live', () => {
+    const { send, post, theme } = setup()
+    post.mockClear()
+    send({ palette: 'nord', transparency: true, opacity: 70 })
+    expect(post.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'dsh://appearance:applied' })
+    expect(theme.overrideTokens.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder.at(-1)!)
+    expect(document.querySelector('style')!.textContent).toContain('#2e3440 70%')
+    send({ palette: 'nord', transparency: true, opacity: 70 })
+    expect(post).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the canvas opaque when transparency is explicitly disabled', () => {
     const { send, theme } = setup()
     send({ transparency: false, opacity: 70 })
     expect(document.querySelector('style')!.textContent).toBe('')
     expect(theme.overrideTokens).not.toHaveBeenCalled()
+  })
+
+  it('keeps the pinned composer backing opaque in full-window transparency', () => {
+    const { send, setScheme } = setup()
+    send({ palette: 'nord', transparency: true, opacity: 70, sidebarOnly: false })
+    expect(document.querySelector('style')!.textContent).toContain('body [data-composer-seat]{--dsw-alias-bg-base:#2e3440}')
+    setScheme('light')
+    expect(document.querySelector('style')!.textContent).toContain('body [data-composer-seat]{--dsw-alias-bg-base:#eceff4}')
+    send({})
+    expect(document.querySelector('style')!.textContent).toBe('')
   })
 
   it('hides the collapsed sidebar while retaining the live right-panel width and restores layout on reset', async () => {

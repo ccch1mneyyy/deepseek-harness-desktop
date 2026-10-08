@@ -3,9 +3,11 @@ import {
   apiKeyRefOf,
   endpointOf,
   getPath,
+  listingHeaders,
   modelsListingUrl,
   normalizeEndpointModel,
   normalizeEndpointModels,
+  parseHeaders,
   parseProfilePath,
 } from './endpoint-models.utils'
 
@@ -87,8 +89,33 @@ describe('profile resolution', () => {
     expect(apiKeyRefOf(undefined)).toBeUndefined()
   })
 
+  it('parses the query spelling of custom request headers', () => {
+    expect(parseHeaders('{"X-Lab-Token":"lab-639"}')).toEqual({ 'X-Lab-Token': 'lab-639' })
+    expect(parseHeaders('{" A ":"1","B":2,"":"3"}')).toEqual({ A: '1' })
+    expect(parseHeaders('{}')).toBeUndefined()
+    expect(parseHeaders('nope')).toBeUndefined()
+    expect(parseHeaders('[1]')).toBeUndefined()
+    expect(parseHeaders(undefined)).toBeUndefined()
+  })
+
   it('appends the listing segment without doubling slashes', () => {
     expect(modelsListingUrl('http://127.0.0.1:8000/v1/')).toBe('http://127.0.0.1:8000/v1/models')
     expect(modelsListingUrl('http://127.0.0.1:8000/v1')).toBe('http://127.0.0.1:8000/v1/models')
+  })
+})
+
+describe('listingHeaders', () => {
+  it('keeps the harness accept and authorization over caller spellings', () => {
+    expect(listingHeaders('sk-lab-639', { 'ACCEPT': 'text/plain', 'Authorization': 'Bearer USER-EVIL', 'x-lab-token': 'lab-639' }))
+      .toEqual({ 'x-lab-token': 'lab-639', 'accept': 'application/json', 'authorization': 'Bearer sk-lab-639' })
+  })
+
+  it('keeps a caller authorization while no credential is available', () => {
+    expect(listingHeaders(undefined, { authorization: 'Bearer USER-ONLY' }))
+      .toEqual({ authorization: 'Bearer USER-ONLY', accept: 'application/json' })
+  })
+
+  it('always sends the harness accept even without caller headers', () => {
+    expect(listingHeaders(undefined, undefined)).toEqual({ accept: 'application/json' })
   })
 })

@@ -1,5 +1,5 @@
 import type { Plugin, PluginProcess, PluginSearchProblem, PluginSearchResult } from '@/store/modules/plugins'
-import { ChevronRight, CircleExclamation, FolderOpen } from '@gravity-ui/icons'
+import { ChevronRight, CircleExclamation, FolderOpen, Rocket } from '@gravity-ui/icons'
 import { Button, Chip, Description, Input, Label, Spinner, Switch, Tooltip } from '@heroui/react'
 import { useOverlay } from '@overlastic/react'
 import { useToggle } from '@reause/core'
@@ -44,7 +44,6 @@ const QUEUED_ACTIONS: Record<PluginProcess['type'], string> = {
 
 /** 兼容性检查的问题码 → i18n key：管理器把宿主返回的 problem 原样透传给调用方 */
 const searchProblemKeys: Record<PluginSearchProblem, string> = {
-  'invalid-spec': 'plugins.search_invalid_spec',
   'local-missing': 'plugins.search_local_missing',
   'not-found': 'plugins.search_not_found',
   'network': 'plugins.search_network',
@@ -295,8 +294,8 @@ export function ConfigPlugin() {
   }
 
   /**
-   * 新增安装入口：先 `manager.search` 预检兼容性（只读，不改 Profile），
-   * 命中明确不兼容的 spec 时中止并提示，其余交给 `manager.install` 走统一队列。
+   * 新增安装入口：`manager.search` 只把解析到的版本与兼容性标记显示出来（只读，不改 Profile），
+   * 安装本身一律交给 `manager.install`；不兼容由宿主拒绝后在管理器里弹授权气泡，面板不提前拦。
    */
   async function onInstall() {
     const refs = splitRefs(installRef, pickedSpec)
@@ -306,12 +305,6 @@ export function ConfigPlugin() {
     try {
       const results = await manager.search(refs)
       setSearchResults(results)
-      const incompatibles = results.filter(item => item.compatible === false)
-      if (incompatibles.length > 0) {
-        const names = incompatibles.map(item => item.name ?? item.spec).join(', ')
-        toast(t('plugins.search_incompatible', { names }), { variant: 'danger' })
-        return
-      }
       setInstallRef('')
       setPickedSpec(null)
       await manager.install(refs)
@@ -668,13 +661,36 @@ export function ConfigPlugin() {
               onChange={() => toggleAdvanced()}
               aria-label={t('plugins.advanced_options')}
             >
-              <Switch.Content>
+              <Switch.Content className="gap-2">
                 <Switch.Control>
                   <Switch.Thumb />
                 </Switch.Control>
+                <span className="text-xs font-medium text-muted">{t('plugins.advanced_options')}</span>
               </Switch.Content>
             </Switch>
-            <span className="text-xs font-medium text-muted">{t('plugins.advanced_options')}</span>
+            <If cond={upgradable.length}>
+              <Tooltip delay={0}>
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => void onUpgradeAll()}
+                  isDisabled={upgradingAll}
+                >
+
+                  <If cond={upgradingAll} then={<Spinner size="sm" color="current" />} else={<Rocket className="size-3.5" />} />
+                  {t('plugins.upgrade_all')}
+                </Button>
+                <Tooltip.Content>
+                  <p>
+                    <If
+                      cond={upgradable.length > 0}
+                      then={t('plugins.upgrade_all_hint', { count: upgradable.length })}
+                      else={t('plugins.upgrade_all_empty')}
+                    />
+                  </p>
+                </Tooltip.Content>
+              </Tooltip>
+            </If>
             <Tooltip delay={0}>
               <Button
                 size="sm"
@@ -688,28 +704,7 @@ export function ConfigPlugin() {
                 <p>{t('preinstall.settings_hint')}</p>
               </Tooltip.Content>
             </Tooltip>
-            <Tooltip delay={0}>
-              <Button
-                size="sm"
-                variant="tertiary"
-                onPress={() => void onUpgradeAll()}
-                isDisabled={upgradingAll || upgradable.length === 0}
-              >
-                <span className="flex items-center gap-1">
-                  <If cond={upgradingAll} then={<Spinner size="sm" color="current" />} />
-                  {t('plugins.upgrade_all')}
-                </span>
-              </Button>
-              <Tooltip.Content>
-                <p>
-                  <If
-                    cond={upgradable.length > 0}
-                    then={t('plugins.upgrade_all_hint', { count: upgradable.length })}
-                    else={t('plugins.upgrade_all_empty')}
-                  />
-                </p>
-              </Tooltip.Content>
-            </Tooltip>
+
           </div>
         )}
         description={t('plugins.panel_tooltip')}
@@ -717,7 +712,7 @@ export function ConfigPlugin() {
 
       <Panel.Loadable loading={manager.loading} error={manager.error}>
         <div className="flex flex-col gap-4">
-          {/* 安装入口：接受 npm spec（可逗号/空白分隔多个），先经管理器只读预检再入队 */}
+          {/* 安装入口：接受 npm spec（可逗号/空白分隔多个），搜索结果只作展示，安装统一入队 */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <Input

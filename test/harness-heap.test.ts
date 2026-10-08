@@ -3,6 +3,7 @@ import i18next from 'i18next'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { resources } from '../src/i18n/index.resource'
 import { attachStartupDiagnostics } from '../src/store/modules/harness/utils'
+import { readSource } from './setup/read-source'
 
 const invokeMock = vi.hoisted(() => vi.fn())
 
@@ -13,6 +14,8 @@ const V8_HEAP_OOM_LINE = 'FATAL ERROR: Ineffective mark-compacts near heap limit
 
 const HEAP_KEYS = [
   'errors.heap_oom',
+  'errors.heap_oom_unknown',
+  'errors.heap_oom_peak',
   'ui.heap_limit',
   'ui.heap_limit_auto',
   'messages.heap_changed',
@@ -26,8 +29,17 @@ function locale(file: 'zh-CN.json' | 'en-US.json'): Record<string, string> {
   return JSON.parse(raw) as Record<string, string>
 }
 
-function stubServiceLogTail(raw: string) {
-  invokeMock.mockImplementation(async (command: string) => (command === 'read_service_logs' ? raw : undefined))
+/** V8 堆耗尽时的 GC 追踪行，括号里是提交的堆总量（崩溃瞬间已超过配置上限） */
+const V8_HEAP_PEAK_LINE = 'Mark-Compact 8058.3 (8224.0) -> 8051.0 (8234.2) MB'
+
+function stubServiceLogTail(raw: string, effectiveLimitMb: number | null = null) {
+  invokeMock.mockImplementation(async (command: string) => {
+    if (command === 'read_service_logs')
+      return raw
+    if (command === 'get_effective_heap_limit_mb')
+      return effectiveLimitMb
+    return undefined
+  })
 }
 
 beforeAll(async () => {
@@ -54,7 +66,29 @@ describe('attachStartupDiagnostics heap exhaustion hint', () => {
 
     const error = await attachStartupDiagnostics(new Error('Harness exited'), true)
 
-    expect(error.heapOomHint).toBe(locale('zh-CN.json')['errors.heap_oom'])
+    expect(error.heapOomHint).toContain(locale('zh-CN.json')['errors.heap_oom_unknown'])
+  })
+
+  it('names the limit that is actually in effect instead of a hard-coded example', async () => {
+    stubServiceLogTail([V8_HEAP_OOM_LINE, V8_HEAP_PEAK_LINE].join('\n'), 1600)
+
+    const error = await attachStartupDiagnostics(new Error('Harness exited'), true)
+
+    expect(error.heapOomHint).toContain('1600 MB')
+    expect(error.heapOomHint).toContain('8234')
+    expect(error.heapOomHint).not.toContain('8192')
+  })
+
+  it('keeps the hint actionable when the effective limit cannot be queried', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'read_service_logs')
+        return V8_HEAP_OOM_LINE
+      throw new Error('command not found')
+    })
+
+    const error = await attachStartupDiagnostics(new Error('Harness exited'), true)
+
+    expect(error.heapOomHint).toContain(locale('zh-CN.json')['errors.heap_oom_unknown'])
   })
 
   it('keeps the hint off when the same log tail predates the current boot', async () => {
@@ -89,5 +123,43 @@ describe('harness heap i18n contract', () => {
       expect(zh[key], `zh-CN.json missing ${key}`).toBeTypeOf('string')
       expect(en[key], `en-US.json missing ${key}`).toBeTypeOf('string')
     }
+  })
+})
+
+describe('服务内存上限的单位', () => {
+  /** 堆上限所在的那一行（到下一个分隔块为止），单位必须落在输入框自身而不是别处 */
+  function heapRow(): string {
+    const source = readSource('src/ui/config/debug.tsx')
+    const start = source.indexOf('ui.heap_limit')
+    expect(start).toBeGreaterThan(-1)
+    const end = source.indexOf('<div className="border-t', start)
+    expect(end).toBeGreaterThan(start)
+    return source.slice(start, end)
+  }
+
+  it('输入框内以 InputGroup 后缀给出 MB 单位', () => {
+    const row = heapRow()
+
+    expect(row).toMatch(/<InputGroup[\s>]/)
+    expect(row).toMatch(/<InputGroup\.Input/)
+    expect(row).toMatch(/<InputGroup\.Suffix[^>]*data-testid="dsh-config-heap-unit"[^>]*>\s*MB\s*</)
+    expect(row).not.toMatch(/<Input[\s>]/)
+  })
+
+  it('保留原有的数字输入语义与无障碍标签', () => {
+    const row = heapRow()
+
+    expect(row).toMatch(/data-testid="dsh-config-heap-input"/)
+    expect(row).toMatch(/type="number"/)
+    expect(row).toMatch(/value=\{heapValue\}/)
+    expect(row).toMatch(/placeholder=\{t\('ui\.heap_limit_auto'\)\}/)
+    expect(row).toMatch(/aria-label=\{t\('ui\.heap_limit'\)\}/)
+    expect(row).toMatch(/onChange=\{e => setHeapInput\(e\.target\.value\)\}/)
+  })
+
+  it('从 heroui 具名导入 InputGroup', () => {
+    const source = readSource('src/ui/config/debug.tsx')
+
+    expect(source).toMatch(/import \{[^}]+InputGroup[^}]*\} from '@heroui\/react'/)
   })
 })

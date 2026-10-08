@@ -184,11 +184,12 @@ describe('built-in plugin toggles', () => {
 })
 
 describe('one-click plugin upgrade', () => {
-  it('shows the bulk upgrade immediately after open preset without enabling advanced options', () => {
+  it('shows the bulk upgrade right before open preset without enabling advanced options', () => {
+    manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' })]
     render(<ConfigPlugin />)
     const preset = screen.getByRole('button', { name: 'preinstall.open_preset' })
     const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' })
-    expect(preset.nextElementSibling).toBe(upgradeAll)
+    expect(upgradeAll.nextElementSibling).toBe(preset)
     expect(screen.getByRole('switch', { name: 'plugins.advanced_options' }).getAttribute('aria-checked')).toBe('false')
   })
 
@@ -196,12 +197,10 @@ describe('one-click plugin upgrade', () => {
     ['no plugins', []],
     ['only current managed plugins', [plugin({ internal: false })]],
     ['only built-in updates', [plugin({ updateAvailable: true, latest: '2.0.0' })]],
-  ] as const)('disables bulk upgrade with %s', (_case, installed) => {
+  ] as const)('hides bulk upgrade with %s', (_case, installed) => {
     manager.installed = [...installed]
     render(<ConfigPlugin />)
-    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
-    expect(upgradeAll.disabled).toBe(true)
-    fireEvent.click(upgradeAll)
+    expect(screen.queryByRole('button', { name: 'plugins.upgrade_all' })).toBeNull()
     expect(manager.upgrade).not.toHaveBeenCalled()
   })
 
@@ -231,15 +230,13 @@ describe('one-click plugin upgrade', () => {
     }))
     manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' })]
     render(<ConfigPlugin />)
-    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
-    fireEvent.click(upgradeAll)
-    expect(upgradeAll.disabled).toBe(true)
-    fireEvent.click(upgradeAll)
+    fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade_all' }))
+    expect(screen.queryByRole('button', { name: 'plugins.upgrade_all' })).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade 2.0.0' })))
     expect(manager.upgrade).toHaveBeenCalledExactlyOnceWith([{ spec: 'updated', version: '2.0.0' }])
 
     await act(async () => settle())
-    expect(upgradeAll.disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement).disabled).toBe(false)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade 2.0.0' })))
     expect(manager.upgrade).toHaveBeenCalledTimes(2)
     expect(manager.upgrade).toHaveBeenLastCalledWith({ spec: 'updated', version: '2.0.0' })
@@ -257,7 +254,7 @@ describe('one-click plugin upgrade', () => {
 
     manager.installed = [plugin({ id: 'queued', internal: false, updateAvailable: true })]
     rerender(<ConfigPlugin />)
-    expect((screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'plugins.upgrade_all' })).toBeNull()
   })
 
   it('excludes a row whose local action is still pending', async () => {
@@ -268,12 +265,9 @@ describe('one-click plugin upgrade', () => {
     manager.installed = [plugin({ id: 'updated', internal: false, updateAvailable: true, latest: '2.0.0' })]
     render(<ConfigPlugin />)
     fireEvent.click(screen.getByRole('button', { name: 'plugins.disable' }))
-    const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
-    expect(upgradeAll.disabled).toBe(true)
-    fireEvent.click(upgradeAll)
-    expect(manager.upgrade).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'plugins.upgrade_all' })).toBeNull()
     await act(async () => settle())
-    expect(upgradeAll.disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('releases the bulk and row guards after a manager failure without duplicating its toast', async () => {
@@ -283,7 +277,7 @@ describe('one-click plugin upgrade', () => {
     render(<ConfigPlugin />)
     const upgradeAll = screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement
     await act(async () => fireEvent.click(upgradeAll))
-    expect(upgradeAll.disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'plugins.upgrade_all' }) as HTMLButtonElement).disabled).toBe(false)
     expect(mocks.toast).not.toHaveBeenCalled()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.upgrade' })))
     expect(manager.upgrade.mock.calls).toEqual([[['updated']], ['updated']])
@@ -360,6 +354,53 @@ describe('local plugin folder picking', () => {
     render(<ConfigPlugin />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.local_dir' })))
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('plugins.local_dir_failed', { variant: 'danger' }))
+  })
+})
+
+describe('incompatible plugin install', () => {
+  /** 不兼容的 spec 必须照样入队：授权气泡由管理器弹，面板不能提前拦截成一条错误提示。 */
+  it('still hands an incompatible spec to the manager instead of failing it at the panel', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'dsh-a', name: 'dsh-a', version: '1.0.0', compatible: false },
+    ])
+    render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'dsh-a' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    await waitFor(() => expect(manager.install).toHaveBeenCalledExactlyOnceWith(['dsh-a']))
+    // 面板既不拦也不报错：授权与否留给管理器那条气泡。
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  it('shows the resolved version of an incompatible spec without blocking the install', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'dsh-a', name: 'dsh-a', version: '1.0.0', compatible: false },
+    ])
+    render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'dsh-a' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    expect(await screen.findByText('plugins.search_incompatible_badge')).toBeTruthy()
+    expect(manager.install).toHaveBeenCalledWith(['dsh-a'])
+  })
+})
+
+describe('non-registry spec search results', () => {
+  /** 宿主对 `github:` 简写与 git URL 不做 registry 解析，面板只转述它给出的结论，不得自己判定 spec 非法。 */
+  it('renders a github spec without a problem label and still installs it', async () => {
+    manager.search.mockResolvedValue([
+      { spec: 'github:MengYuil/dsh-ponytail', compatible: null },
+    ])
+    const { container } = render(<ConfigPlugin />)
+    const input = screen.getByPlaceholderText('plugins.install_placeholder')
+    await act(async () => fireEvent.change(input, { target: { value: 'github:MengYuil/dsh-ponytail' } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'plugins.install' })))
+
+    await waitFor(() => expect(manager.install).toHaveBeenCalledExactlyOnceWith(['github:MengYuil/dsh-ponytail']))
+    expect(container.querySelector('.text-danger')).toBeNull()
+    expect(screen.getByText('github:MengYuil/dsh-ponytail')).toBeTruthy()
   })
 })
 

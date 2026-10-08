@@ -94,6 +94,35 @@ export function parseProfilePath(raw: string | undefined): string[] {
   }
 }
 
+export function parseHeaders(raw: string | undefined): Record<string, string> | undefined {
+  if (raw === undefined || raw.trim().length === 0)
+    return undefined
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed))
+      return undefined
+    const headers: Record<string, string> = {}
+    for (const [name, value] of Object.entries(parsed)) {
+      const trimmed = name.trim()
+      if (trimmed.length > 0 && typeof value === 'string')
+        headers[trimmed] = value
+    }
+    return Object.keys(headers).length === 0 ? undefined : headers
+  }
+  catch {
+    return undefined
+  }
+}
+
+export function listingHeaders(apiKey: string | undefined, headers: Record<string, string> | undefined): Record<string, string> {
+  const owned: Record<string, string> = apiKey === undefined
+    ? { accept: 'application/json' }
+    : { accept: 'application/json', authorization: `Bearer ${apiKey}` }
+  const reserved = new Set(Object.keys(owned).map(name => name.toLowerCase()))
+  const kept = Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))
+  return { ...Object.fromEntries(kept), ...owned }
+}
+
 export function apiKeyRefOf(profile: unknown): string | undefined {
   return nonEmptyText(isRecord(profile) ? profile.apiKeyEnv : undefined)
 }

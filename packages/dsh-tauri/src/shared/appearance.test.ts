@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APPEARANCE_DEFAULTS, APPEARANCE_PALETTES, appearanceColors, appearanceTokens, normalizeAppearance } from './appearance'
+import { APPEARANCE_DEFAULTS, APPEARANCE_PALETTES, appearanceBootCss, appearanceColors, appearanceSidebarFill, appearanceStartupFill, appearanceTokens, normalizeAppearance } from './appearance'
 
 describe('appearance preferences', () => {
   it('migrates old transparency settings but respects an explicit disabled switch', () => {
@@ -13,7 +13,43 @@ describe('appearance preferences', () => {
   })
 
   it.each([[0, 20], [255, 100], [77.4, 77], [80, 80]])('normalizes opacity %s to %s', (input, opacity) => {
-    expect(normalizeAppearance({ palette: 'nord', terminal: true, opacity: input })).toEqual({ palette: 'nord', terminal: true, transparency: opacity < 100, opacity, sidebarOnly: false })
+    expect(normalizeAppearance({ palette: 'nord', terminal: true, opacity: input })).toEqual({ palette: 'nord', terminal: true, transparency: opacity < 100, opacity, blur: false, sidebarOnly: false })
+  })
+
+  it.each([[false, false], [true, true], [0, false], [1, true], [40, true]])('normalizes blur %s to %s', (input, expected) => {
+    expect(normalizeAppearance({ transparency: true, opacity: 70, blur: input }).blur).toBe(expected)
+  })
+
+  it.each([
+    [true, 70, 'color-mix(in srgb,#2e3440 70%,transparent)'],
+    [true, 100, 'color-mix(in srgb,#2e3440 100%,transparent)'],
+    [false, 70, '#343c4a'],
+  ])('gives the shell bar the sidebar column fill for translucent=%s at %s%%', (translucent, percent, expected) => {
+    expect(appearanceSidebarFill('#2e3440', '#343c4a', translucent, percent)).toBe(expected)
+  })
+
+  it.each([
+    [{ transparency: true, opacity: 70 }, 'color-mix(in srgb,#2e3440 70%,transparent)'],
+    [{ transparency: true, opacity: 70, sidebarOnly: true }, 'color-mix(in srgb,#2e3440 70%,transparent)'],
+    [{ transparency: true, opacity: 100 }, '#2e3440'],
+    [{ transparency: false, opacity: 70 }, '#2e3440'],
+  ])('fills startup surfaces like the shell bar for preferences=%j', (preferences, expected) => {
+    expect(appearanceStartupFill(normalizeAppearance({ palette: 'nord', ...preferences }), '#2e3440')).toBe(expected)
+  })
+
+  it('projects the boot page onto the window behind it without doubling the alpha', () => {
+    const css = appearanceBootCss(normalizeAppearance({ palette: 'nord', transparency: true, opacity: 70 }))
+    expect(css).toContain('html:has(>body>#root>[data-dsh-boot]),body:has(>#root>[data-dsh-boot]),#root:has(>[data-dsh-boot]){background:transparent!important}')
+    expect(css).toContain('body[data-ds-dark-theme] > #root > [data-dsh-boot]{background:color-mix(in srgb,#2e3440 70%,transparent)!important}')
+    expect(css).toContain('body:not([data-ds-dark-theme]) > #root > [data-dsh-boot]{background:color-mix(in srgb,#eceff4 70%,transparent)!important}')
+    expect(css).not.toContain('data-dsh-boot]{background:#2e3440')
+  })
+
+  it.each([
+    [{ palette: 'nord', transparency: false, opacity: 70 }],
+    [{ palette: 'nord', transparency: true, opacity: 100 }],
+  ])('leaves the boot page opaque for preferences=%j', (preferences) => {
+    expect(appearanceBootCss(normalizeAppearance(preferences))).toBe('')
   })
 
   it.each(['github', 'github-dimmed', 'github-high-contrast'])('preserves the saved %s palette', (palette) => {

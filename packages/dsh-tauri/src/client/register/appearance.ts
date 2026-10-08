@@ -1,7 +1,7 @@
 import type { ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { Appearance } from '../../shared/appearance'
 import type { ClientContext } from '../types'
-import { appearanceColors, appearanceTokens, normalizeAppearance } from '../../shared/appearance'
+import { appearanceBootCss, appearanceColors, appearanceSidebarFill, appearanceTokens, appearanceTranslucent, normalizeAppearance } from '../../shared/appearance'
 import { PLUGIN_ID } from '../../shared/constants'
 import { invokeParent } from '../service/invoke-parent'
 import { listenParent } from '../service/listen-parent'
@@ -28,12 +28,17 @@ export const registerAppearance = defineRegister<ClientContext>((controller, ctx
   function updateStyles() {
     if (!current)
       return
-    const { canvas } = appearanceColors(current, theme!.getTheme().active.colorScheme)
-    const translucent = current.transparency && current.opacity < 100
+    const { canvas, panel } = appearanceColors(current, theme!.getTheme().active.colorScheme)
+    const translucent = appearanceTranslucent(current)
     style.textContent = [
-      translucent ? `html{background:transparent!important}body{background:color-mix(in srgb,${canvas} ${current.opacity}%,transparent)!important}` : '',
-      translucent && current.sidebarOnly ? `body :has(>[data-slot="main"]),body [data-rightbar-col]{--dsw-alias-bg-base:${canvas};background:${canvas}!important}` : '',
+      translucent ? `html{background:transparent!important}body{background:${appearanceSidebarFill(canvas, panel, translucent, current.opacity)}!important}` : '',
+      translucent && current.sidebarOnly
+        ? `body :has(>[data-slot="main"]),body [data-rightbar-col]{--dsw-alias-bg-base:${canvas};background:${canvas}!important} `
+        + `[data-slot="settings.content"]{--dsw-alias-bg-base:${canvas};background:${canvas}!important}`
+        : '',
+      translucent ? `body [data-composer-seat]{--dsw-alias-bg-base:${canvas}}` : '',
       current.terminal ? 'body [data-sidebar-collapsed]:has(>[data-shell-overlay]){grid-template-columns:var(--dsh-appearance-columns)!important}body [data-sidebar-collapsed] [data-slot="sidebar"]{visibility:hidden}' : '',
+      appearanceBootCss(current),
     ].filter(Boolean).join('\n')
   }
 
@@ -79,12 +84,13 @@ export const registerAppearance = defineRegister<ClientContext>((controller, ctx
     current = next
     removeTokens?.()
     const tokens = appearanceTokens(next)
-    if (next.transparency && next.opacity < 100) {
+    if (appearanceTranslucent(next)) {
       tokens['--dsw-alias-bg-base'] = { dark: 'transparent', light: 'transparent' }
       tokens['--dsw-specific-sidebar-fill'] = { dark: 'transparent', light: 'transparent' }
     }
     removeTokens = Object.keys(tokens).length ? theme.overrideTokens('dsh-tauri:appearance', tokens) : undefined
     updateStyles()
+    invokeParent({ type: 'dsh://appearance:applied' })
     if (terminalChanged) {
       stopTerminal()
       if (next.terminal && !attachFrame()) {

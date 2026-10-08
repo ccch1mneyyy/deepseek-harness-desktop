@@ -146,11 +146,14 @@ describe.skipIf(process.platform === 'darwin')('桌面端启动冒烟', () => {
       await element.waitForClickable()
       await element.click()
     }
-    async function appearance() {
+    async function config() {
       return browser.execute(async () => {
-        const bridge = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<{ appearance: { palette: string, terminal: boolean, transparency: boolean, opacity: number, sidebarOnly: boolean } }> } }).__TAURI_INTERNALS__
-        return (await bridge.invoke('get_app_config')).appearance
+        const bridge = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<{ zoom_factor: number, appearance: { palette: string, terminal: boolean, transparency: boolean, opacity: number, blur: boolean, sidebarOnly: boolean } }> } }).__TAURI_INTERNALS__
+        return bridge.invoke('get_app_config')
       })
+    }
+    async function appearance() {
+      return (await config()).appearance
     }
     await click('dsh-navbar-menu-config')
     await click('dsh-navbar-item-appearance')
@@ -166,15 +169,24 @@ describe.skipIf(process.platform === 'darwin')('桌面端启动冒烟', () => {
     await transparency.waitForEnabled()
     await transparency.click()
     await browser.waitUntil(async () => (await appearance()).transparency)
+    expect(await appearance(), '开启原生透明未应用默认组合').toEqual({ palette: 'nord', terminal: true, transparency: true, opacity: 80, blur: true, sidebarOnly: true })
     const opacity = await browser.$('[data-testid="dsh-appearance-opacity"] input[type="range"]')
     await opacity.waitForEnabled()
     await browser.execute(() => document.querySelector<HTMLInputElement>('[data-testid="dsh-appearance-opacity"] input[type="range"]')!.focus())
     await browser.keys(Key.ArrowLeft)
-    await browser.waitUntil(async () => (await appearance()).opacity === 99, { timeoutMsg: '原生设置未保存滑块的 99% 不透明度' })
-    expect(await appearance(), '原生设置与所选外观不一致').toEqual({ palette: 'nord', terminal: true, transparency: true, opacity: 99, sidebarOnly: false })
+    await browser.waitUntil(async () => (await appearance()).opacity === 79, { timeoutMsg: '原生设置未保存滑块的 79% 不透明度' })
+    const sidebarOnly = await browser.$('[data-testid="dsh-appearance-sidebar-only"] input[role="switch"]')
+    await sidebarOnly.waitForEnabled()
+    await sidebarOnly.click()
+    await browser.waitUntil(async () => !(await appearance()).sidebarOnly, { timeoutMsg: '原生设置未保存内容区不透明开关' })
+    await click('dsh-appearance-zoom')
+    await click('dsh-appearance-zoom-1.2')
+    await browser.waitUntil(async () => (await config()).zoom_factor === 1.2, { timeoutMsg: '本机界面缩放未从外观面板保存' })
+    expect(await appearance(), '原生设置与所选外观不一致').toEqual({ palette: 'nord', terminal: true, transparency: true, opacity: 79, blur: true, sidebarOnly: false })
     await click('dsh-appearance-reset')
     await browser.waitUntil(async () => (await appearance()).palette === 'default', { timeoutMsg: '原生外观设置未恢复默认值' })
-    expect(await appearance(), '重置未还原完整原生外观设置').toEqual({ palette: 'default', terminal: false, transparency: false, opacity: 100, sidebarOnly: false })
+    expect(await appearance(), '重置未还原完整原生外观设置').toEqual({ palette: 'default', terminal: false, transparency: false, opacity: 100, blur: false, sidebarOnly: false })
+    expect((await config()).zoom_factor, '重置未还原本机界面缩放').toBe(1)
     await click('dsh-config-dialog-close')
   })
 

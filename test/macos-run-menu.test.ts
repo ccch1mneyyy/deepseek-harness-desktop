@@ -98,7 +98,7 @@ describe('macOS native menu', () => {
     expect(i18nSource).toContain(`"${key}" => ("${zh}", "${en}")`)
   })
 
-  it('groups feedback links before run logs and the task manager in Help', () => {
+  it('groups feedback links before run logs, developer tools and the task manager in Help', () => {
     expect(submenuItems('desktop-help-menu')).toEqual([
       '&documentation',
       '&keyboard_shortcuts',
@@ -107,8 +107,10 @@ describe('macOS native menu', () => {
       '&harness_feedback',
       '&feedback_separator',
       '&run_logs',
+      '&toggle_devtools',
       '&task_manager',
     ])
+    expect(i18nSource).toContain('"menu.toggle_devtools" => ("切换开发者工具", "Toggle Developer Tools")')
     expect(i18nSource).toContain('"menu.task_manager" => ("任务管理器", "Task Manager")')
   })
 

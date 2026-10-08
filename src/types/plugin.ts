@@ -80,3 +80,53 @@ export interface PatchEntryStripReport {
   /** 被清理过的补丁层（没有悬空条目时为空） */
   layers: StrippedPatchLayer[]
 }
+
+/** 迁移条目的兼容性判定结果（判定基准 = 当前核心版本） */
+export type MigrationVerdict = 'compatible' | 'upgrade' | 'downgrade' | 'unknown'
+
+/** Rust 侧 service::profile::migrate::MigrationEntry 的序列化形态 */
+export interface MigrationEntry {
+  /** 依赖键（npm 包名） */
+  id: string
+  /** 源档案已安装的版本 */
+  version: string
+  /** 实际用于安装的 spec（不兼容时带目标版本） */
+  spec: string
+  verdict: MigrationVerdict
+  /** 升级/降级的建议版本；其余判定缺省 */
+  targetVersion?: string
+}
+
+/** 档案级数据类别（Rust 侧 MigrationDataKind） */
+export type MigrationDataKind = 'patch' | 'disabled' | 'policy' | 'credentials'
+
+/** Rust 侧 service::profile::migrate::MigrationDataItem 的序列化形态 */
+export interface MigrationDataItem {
+  kind: MigrationDataKind
+  /** 条目数；凭据等无「条数」概念的一项缺省 */
+  count?: number
+  /** 目标档案已完全包含：迁移是空操作，界面禁用勾选 */
+  covered: boolean
+}
+
+/** Rust 侧 service::profile::migrate::MigrationAnalysis 的序列化形态 */
+export interface MigrationAnalysis {
+  plugins: MigrationEntry[]
+  /** 只有源档案里实际存在的数据项才会出现 */
+  data: MigrationDataItem[]
+}
+
+/** Rust 侧 service::profile::migrate::MigrationFailure 的序列化形态 */
+export interface MigrationFailure {
+  kind: MigrationDataKind
+  /** 失败原因（Rust 侧错误码，含大写前缀） */
+  message: string
+}
+
+/** Rust 侧 service::profile::migrate::MigrateReport 的序列化形态 */
+export interface MigrateReport {
+  applied: MigrationDataKind[]
+  /** 目标已有、按「目标优先」未改动的项 */
+  skipped: MigrationDataKind[]
+  failures: MigrationFailure[]
+}

@@ -14,6 +14,8 @@ export interface PetStatus {
   active_pet: string
   /** 宠物大小百分比（50–200；None = 未设置，按 100 处理）。 */
   pet_size?: number | null
+  /** 是否允许抛射（飞行 + 撞屏幕边缘回弹）；缺省 / undefined = 关闭。 */
+  throw_enabled?: boolean | null
 }
 
 /**

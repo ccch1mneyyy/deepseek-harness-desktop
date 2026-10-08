@@ -8,10 +8,13 @@ import {
   CMD_IMPORT_PET,
   CMD_LIST_PETS,
   CMD_LIST_PRESET_PETS,
+  CMD_OPEN_EXTERNAL_URL,
   CMD_SET_ACTIVE_PET,
   CMD_SET_FORCE_XWAYLAND,
   CMD_SET_PET_ENABLED,
   CMD_SET_PET_SIZE,
+  CMD_SET_PET_THROW_ENABLED,
+  PET_COMMUNITY_URL,
   PET_HATCH_PROMPT,
 } from '../constants'
 import { store } from '../store'
@@ -168,11 +171,36 @@ export async function resizePet(input: { size: number }): Promise<PetActionResul
   })
 }
 
+/**
+ * Action：开关抛射能力（拖拽甩出后飞行、撞屏幕边缘回弹）。
+ *
+ * 与 `togglePet` 同形：命令回吐权威状态，前端不做乐观本地副本；抛射开关经
+ * `pet://status` 广播给桌宠窗口，立即生效。
+ */
+export async function togglePetThrow(input: { enabled: boolean }): Promise<PetActionResult> {
+  return guard('toggle pet throw', async () => {
+    store.pet.setStatus(await invoke<PetStatus>(CMD_SET_PET_THROW_ENABLED, { enabled: input.enabled }))
+    return { ok: true }
+  })
+}
+
 /** Action：导入宠物压缩包（base64），成功后刷新 Codex 清单。 */
 export async function importPetArchive(input: { name: string, data: string }): Promise<PetActionResult> {
   return guard('import pet', async () => {
     await invoke<PetListItem>(CMD_IMPORT_PET, { name: input.name, data: input.data })
     store.pet.setCodexPets(await invoke<PetListItem[]>(CMD_LIST_PETS, { source: 'codex' }))
+    return { ok: true }
+  })
+}
+
+/**
+ * Action：在系统浏览器中打开 Codex 宠物社区站点。
+ *
+ * 只借桌面端既有的外链命令，不开新窗口、不改任何持久状态。
+ */
+export async function openCommunityShare(): Promise<PetActionResult> {
+  return guard('open community share', async () => {
+    await invoke(CMD_OPEN_EXTERNAL_URL, { url: PET_COMMUNITY_URL })
     return { ok: true }
   })
 }

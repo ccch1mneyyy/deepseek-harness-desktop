@@ -44,8 +44,32 @@ pub async fn inspect_specs(
     Ok(results)
 }
 
-/// 单条 spec：本地目录离线读清单，静态解析不出包名（git / URL / 非法写法）时不做
-/// 网络请求。
+/// 拉取包的完整版本清单（缩写 packument：`versions` 映射里带每个版本的依赖声明）。
+///
+/// 与 [`inspect_one`] 读的单版本清单不同：判定「哪个历史版本与该核心兼容」必须
+/// 遍历全部版本，只有不带版本号的 packument 才有。任何失败返回 `None`（Fail-Open）。
+pub(crate) async fn packument(app_handle: &AppHandle, name: &str) -> Option<serde_json::Value> {
+    let client = crate::config::proxy::http_client_builder(app_handle)
+        .ok()?
+        .timeout(INSPECT_TIMEOUT)
+        .build()
+        .ok()?;
+    let url = format!("https://registry.npmjs.org/{}", encode_registry_name(name));
+    let response = client
+        .get(&url)
+        .header("accept", "application/vnd.npm.install-v1+json")
+        .header("user-agent", "deepseek-harness-desktop")
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    response.json::<serde_json::Value>().await.ok()
+}
+
+/// 单条 spec：本地目录离线读清单；静态解析不出 registry 包名的来源（`github:`
+/// 简写、git / tarball URL）不做网络请求。
 async fn inspect_one(
     client: &reqwest::Client,
     spec: &str,
@@ -56,8 +80,11 @@ async fn inspect_one(
     if spec::local_path_spec(raw).is_some() {
         return inspect_local(raw, base, runtime);
     }
+    // 解析不出包名不等于 spec 写错了：`github:owner/repo` 与 git / tarball URL 都是
+    // pnpm 与 dsh 接受的合法来源，只是只读检查无从查询其版本与依赖。留空交给安装
+    // 链路自己解析（Fail-Open）——报 invalid-spec 会把合法来源说成写法错误。
     let Some(name) = spec::package_name_of_spec(raw, base) else {
-        return problem_result(raw, None, "invalid-spec");
+        return uninspected(raw, None);
     };
 
     let requested = requested_version(raw, &name);
@@ -165,12 +192,21 @@ fn requested_version(raw: &str, name: &str) -> Option<String> {
 /// 出错条目：保留已解析到的包名便于前端展示，兼容性留空（Fail-Open）。
 fn problem_result(spec: &str, name: Option<String>, problem: &str) -> PluginInspect {
     PluginInspect {
+        problem: Some(problem.to_string()),
+        ..uninspected(spec, name)
+    }
+}
+
+/// 无从静态检查的条目：来源本身合法，但没有 registry 清单可读，因此既不给版本、
+/// 也不给任何判定——安装链路会自己解析它。
+fn uninspected(spec: &str, name: Option<String>) -> PluginInspect {
+    PluginInspect {
         spec: spec.to_string(),
         name,
         version: None,
         compatible: None,
         peers: None,
-        problem: Some(problem.to_string()),
+        problem: None,
     }
 }
 
@@ -253,7 +289,7 @@ mod tests {
     #[test]
     fn local_spec_reports_local_missing_for_absent_dir_or_manifest() {
         // 三种「本地路径但拿不到清单」的形态都必须落到 local-missing，而不是
-        // invalid-spec / not-found —— 后两者会让用户以为要改写法或去 registry 找包。
+        // not-found / 干脆不判定 —— 前者会让用户以为要去 registry 找包。
         let (base, dir) = fixture("absent", None);
 
         let missing_dir = inspect_local("./never-existed", &base, Some("0.2.0"));
@@ -283,5 +319,25 @@ mod tests {
         assert_eq!(result.version.as_deref(), Some("1.0.0"));
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn non_registry_specs_are_left_uninspected() {
+        // 回归：`github:owner/repo` 与 git / tarball URL 是 pnpm 与 dsh 都接受的合法
+        // 来源，只是查不到 registry 清单——报 invalid-spec 会让用户以为 spec 写错了。
+        let client = reqwest::Client::new();
+        let base = std::path::Path::new(".");
+        for spec in [
+            "github:MengYuil/dsh-ponytail",
+            "https://github.com/MengYuil/dsh-ponytail",
+            "git+https://github.com/MengYuil/dsh-ponytail.git#main",
+            "https://example.com/plugin.tgz",
+        ] {
+            let result = inspect_one(&client, spec, base, Some("0.2.0")).await;
+            assert_eq!(result.spec, spec);
+            assert_eq!(result.problem, None, "{spec}");
+            assert_eq!(result.compatible, None, "{spec}");
+            assert_eq!(result.name, None, "{spec}");
+        }
     }
 }

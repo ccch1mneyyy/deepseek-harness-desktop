@@ -7,6 +7,7 @@ pub struct Appearance {
     pub terminal: bool,
     pub transparency: bool,
     pub opacity: u8,
+    pub blur: bool,
     pub sidebar_only: bool,
 }
 
@@ -17,6 +18,7 @@ impl Default for Appearance {
             terminal: false,
             transparency: false,
             opacity: 100,
+            blur: false,
             sidebar_only: false,
         }
     }
@@ -36,6 +38,11 @@ impl From<serde_json::Value> for Appearance {
                 .get("transparency")
                 .map_or(opacity < 100, |value| value.as_bool().unwrap_or(false)),
             opacity,
+            blur: value["blur"].as_bool().unwrap_or_else(|| {
+                value["blur"]
+                    .as_f64()
+                    .is_some_and(|value| value.is_finite() && value > 0.0)
+            }),
             sidebar_only: value["sidebarOnly"].as_bool().unwrap_or(false),
         };
         appearance.normalize();
@@ -44,6 +51,10 @@ impl From<serde_json::Value> for Appearance {
 }
 
 impl Appearance {
+    pub fn native_blur_enabled(&self) -> bool {
+        self.transparency && self.blur
+    }
+
     pub fn normalize(&mut self) {
         if !matches!(
             self.palette.as_str(),
@@ -129,6 +140,41 @@ mod tests {
     }
 
     #[test]
+    fn blur_decoding_accepts_the_switch_and_migrates_positive_preview_values() {
+        for (value, expected) in [
+            (serde_json::json!(false), false),
+            (serde_json::json!(true), true),
+            (serde_json::json!(-1), false),
+            (serde_json::json!(0), false),
+            (serde_json::json!(1), true),
+            (serde_json::json!(40), true),
+        ] {
+            let appearance: Appearance = serde_json::from_value(serde_json::json!({
+                "blur": value
+            }))
+            .unwrap();
+            assert_eq!(appearance.blur, expected, "{value}");
+        }
+    }
+
+    #[test]
+    fn native_blur_requires_both_window_transparency_and_the_blur_switch() {
+        for (transparency, blur, expected) in [
+            (false, false, false),
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let appearance = Appearance {
+                transparency,
+                blur,
+                ..Default::default()
+            };
+            assert_eq!(appearance.native_blur_enabled(), expected);
+        }
+    }
+
+    #[test]
     fn invalid_opacity_preserves_the_other_appearance_fields() {
         for value in [
             serde_json::json!(null),
@@ -159,7 +205,7 @@ mod tests {
         for palette in ["github", "github-dimmed", "github-high-contrast"] {
             let appearance: Appearance = serde_json::from_value(serde_json::json!({
                 "palette": palette, "terminal": true, "transparency": true,
-                "opacity": 78, "sidebarOnly": true
+                "opacity": 78, "blur": true, "sidebarOnly": true
             }))
             .unwrap();
             assert_eq!(appearance.palette, palette);
@@ -182,6 +228,7 @@ mod tests {
         appearance.normalize();
         assert_eq!(appearance.palette, "default");
         assert_eq!(appearance.opacity, 20);
+        assert!(!appearance.blur);
         assert!(appearance.terminal);
         appearance.opacity = 255;
         appearance.normalize();

@@ -68,6 +68,7 @@ mod spec;
 // 子模块对外 API：plugin 兄弟模块（verify / internal 等）与安装编排共用
 pub(crate) use env::build_plugin_envs;
 pub use inspect::inspect_specs;
+pub(crate) use inspect::packument;
 pub(crate) use pnpm::{
     bundled_pnpm_major, harness_prefer_bundled_pnpm, pnpm_major_version_at, profile_store_major,
 };

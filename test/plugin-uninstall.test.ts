@@ -89,7 +89,7 @@ describe('configPlugin preset chip', () => {
   })
 })
 
-// ── Suite C — uninstall routes through the manager + settles with one restart ──
+// ── Suite C — uninstall routes through the manager + settles without a restart prompt ──
 describe('configPlugin uninstall flow', () => {
   it('routes uninstall through the manager batch command', () => {
     const panel = readFileSync(new URL('../src/ui/config/plugin.tsx', import.meta.url), 'utf8')
@@ -100,12 +100,12 @@ describe('configPlugin uninstall flow', () => {
     expect(store).toContain('remove_dsh_plugins')
   })
 
-  it('restarts the service once when the group settles', () => {
+  it('settles results without offering a restart', () => {
     const store = readFileSync(new URL('../src/store/modules/plugins/store.ts', import.meta.url), 'utf8')
 
-    // 重启权收口到组结算：面板不再为卸载单独重启
-    expect(store).toContain('group.options.restartOnSettle')
-    expect(store).toContain('harness.restart()')
+    // 队列自己热更新插件：结果气泡不挂「重启」按钮，也不再让气泡常驻
+    expect(store).not.toContain('restartAction')
+    expect(store).not.toContain('actionProps: restart')
   })
 
   it('shows a confirm dialog before uninstall', () => {

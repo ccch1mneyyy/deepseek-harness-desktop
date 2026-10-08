@@ -26,7 +26,7 @@ function setup(fail = false, opacity = 70) {
     mocks.setting.$patch(value)
   })
   mocks.setting = defineStore({
-    state: () => ({ appearance: { palette: 'nord', terminal: false, opacity } }),
+    state: () => ({ appearance: { palette: 'nord', terminal: false, opacity }, zoom_factor: 1 }),
     actions: { update },
   })
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
@@ -54,6 +54,16 @@ describe('appearance settings controls', () => {
     expect(screen.queryByRole('switch', { name: 'appearance.sidebar_only' })).toBeNull()
   })
 
+  it('applies the transparent-mode defaults when native transparency is switched on', async () => {
+    const update = setup()
+    const toggle = screen.getByRole('switch', { name: 'appearance.transparency' })
+    fireEvent.click(toggle)
+    await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
+    fireEvent.click(toggle)
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ appearance: expect.objectContaining({ transparency: true, opacity: 80, blur: true, sidebarOnly: true }) }))
+    await waitFor(() => expect((screen.getByRole('switch', { name: 'appearance.sidebar_only' }) as HTMLInputElement).checked).toBe(true))
+  })
+
   it('restores the saved slider value when persistence fails', async () => {
     setup(true)
     const slider = screen.getByRole('slider', { name: 'appearance.opacity' })
@@ -75,17 +85,31 @@ describe('appearance settings controls', () => {
     await waitFor(() => expect((screen.getByRole('switch', { name: 'appearance.sidebar_only' }) as HTMLInputElement).checked).toBe(true))
   })
 
+  it('persists blur in the same native appearance setting', async () => {
+    const update = setup()
+    fireEvent.click(screen.getByRole('switch', { name: 'appearance.blur' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ appearance: expect.objectContaining({ blur: true }) }))
+  })
+
+  it('exposes the existing device-local zoom in Appearance', async () => {
+    const update = setup()
+    const select = screen.getByTestId('dsh-appearance-zoom').closest('[data-slot="select"]')!.querySelector('select')!
+    fireEvent.change(select, { target: { value: '1.2' } })
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ zoomFactor: 1.2 }))
+    expect(screen.getByText('appearance.zoom_description')).toBeTruthy()
+  })
+
   it('provides an operable terminal switch and resets all preferences', async () => {
     const update = setup()
     const toggle = screen.getByRole('switch', { name: 'appearance.terminal' })
     fireEvent.click(toggle)
-    await waitFor(() => expect(update).toHaveBeenCalledWith({ appearance: { palette: 'nord', terminal: true, transparency: true, opacity: 70, sidebarOnly: false } }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ appearance: { palette: 'nord', terminal: true, transparency: true, opacity: 70, blur: false, sidebarOnly: false } }))
     await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(true))
     expect(screen.getByTestId('dsh-appearance-restart').textContent).toBe('appearance.restart')
     const reset = screen.getByRole('button', { name: 'appearance.reset' }) as HTMLButtonElement
     await waitFor(() => expect(reset.disabled).toBe(false))
     fireEvent.click(reset)
-    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ appearance: APPEARANCE_DEFAULTS }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ appearance: APPEARANCE_DEFAULTS, zoomFactor: 1 }))
     await waitFor(() => expect(screen.queryByTestId('dsh-appearance-restart')).toBeNull())
     expect((toggle as HTMLInputElement).checked).toBe(false)
   })

@@ -327,7 +327,6 @@ export function ConfigCore() {
           <Button
             size="sm"
             variant="tertiary"
-            className="h-7 shrink-0 text-xs"
             isDisabled={busy || refreshing}
             aria-label={t('core.refresh')}
             onPress={onRefresh}

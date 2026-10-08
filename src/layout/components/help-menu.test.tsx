@@ -5,13 +5,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Navbar } from './navbar'
 
-const { userAgent, openUrl, writeText, toast } = vi.hoisted(() => {
+const { userAgent, openUrl, writeText, toast, toggleDevtools } = vi.hoisted(() => {
   const userAgent = navigator.userAgent
   Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Windows' })
   return {
     userAgent,
     openUrl: vi.fn<(args: { url: string }) => Promise<void>>(),
     writeText: vi.fn<(args: { text: string }) => Promise<void>>(),
+    toggleDevtools: vi.fn<() => Promise<void>>(),
     toast: vi.fn<(title: string, options?: {
       variant?: string
       description?: ReactNode
@@ -50,6 +51,7 @@ beforeEach(() => {
   vi.stubGlobal('CSS', { escape: (value: string) => value.replace(/[^\w-]/g, character => `\\${character}`) })
   openUrl.mockReset().mockResolvedValue(undefined)
   writeText.mockReset().mockResolvedValue(undefined)
+  toggleDevtools.mockReset().mockResolvedValue(undefined)
   toast.mockClear()
   mockWindows('main')
   mockIPC((command, args) => {
@@ -58,6 +60,8 @@ beforeEach(() => {
         return openUrl(args as { url: string })
       case 'write_clipboard_text':
         return writeText(args as { text: string })
+      case 'toggle_devtools':
+        return toggleDevtools()
       case 'plugin:event|listen':
         return (args as { handler: number }).handler
       case 'plugin:event|unlisten':
@@ -115,6 +119,32 @@ describe('help menu links', () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith({ text: url }))
     expect(toast.mock.calls.map(([title]) => title)).toEqual(['messages.open_link_failed', 'messages.copy_success'])
+  })
+
+  it('toggles the developer tools from the item above the task manager', async () => {
+    render(<Navbar onRemoteChange={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('dsh-navbar-menu-help'))
+    const devtools = await screen.findByTestId('dsh-navbar-item-toggle-devtools')
+    const taskManager = screen.getByTestId('dsh-navbar-item-task-manager')
+    expect(devtools.compareDocumentPosition(taskManager) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.click(devtools)
+
+    await waitFor(() => expect(toggleDevtools).toHaveBeenCalledExactlyOnceWith())
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('reports a developer tools failure once', async () => {
+    const failure = new Error('devtools unavailable')
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    toggleDevtools.mockRejectedValue(failure)
+
+    render(<Navbar onRemoteChange={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('dsh-navbar-menu-help'))
+    fireEvent.click(await screen.findByTestId('dsh-navbar-item-toggle-devtools'))
+
+    await waitFor(() => expect(log).toHaveBeenCalledExactlyOnceWith('[Navbar] failed to toggle devtools:', failure))
+    expect(toast).not.toHaveBeenCalled()
   })
 
   it('reports a clipboard failure once when copying a failed feedback link', async () => {

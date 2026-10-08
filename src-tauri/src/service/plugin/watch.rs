@@ -133,7 +133,7 @@ fn read_plugin_meta(dir: &Path) -> Option<PluginPackageJson> {
 ///
 /// 只列出 profile package.json `dependencies` 中的直接依赖——node_modules 里
 /// 还有大量传递依赖（clsx/zod 等），它们不是用户安装的 dsh 插件，不应展示。
-fn parse_plugins(profile: &Path, presets: &[PreinstallPluginInfo]) -> Vec<DshPlugin> {
+pub(crate) fn parse_plugins(profile: &Path, presets: &[PreinstallPluginInfo]) -> Vec<DshPlugin> {
     let manifest_content = match std::fs::read_to_string(profile.join("package.json")) {
         Ok(content) => content,
         Err(_) => return Vec::new(),
